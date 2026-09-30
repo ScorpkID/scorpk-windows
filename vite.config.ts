@@ -6,6 +6,7 @@ import tailwindcss from "@tailwindcss/vite";
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   clearScreen: false,
-  server: { port: 1420, strictPort: true },
+  // Vite no debe vigilar el código Rust: los .exe de target/ bloqueados por Windows lo hacían caer (EBUSY).
+  server: { port: 1420, strictPort: true, watch: { ignored: ["**/src-tauri/**"] } },
   test: { environment: "node", include: ["src/**/*.test.ts"] },
 });
