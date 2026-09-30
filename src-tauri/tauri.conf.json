@@ -19,6 +19,21 @@
         "minWidth": 420,
         "minHeight": 560,
         "backgroundColor": "#000000"
+      },
+      {
+        "label": "overlay",
+        "title": "Scorpk Asistente",
+        "url": "index.html?view=overlay",
+        "width": 680,
+        "height": 96,
+        "visible": false,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "resizable": false,
+        "shadow": false,
+        "focus": false
       }
     ],
     "security": {

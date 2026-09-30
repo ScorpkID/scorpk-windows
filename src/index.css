@@ -49,3 +49,10 @@ body {
 .appear {
   animation: appear 0.22s ease-out;
 }
+
+/* La ventana del overlay es transparente: solo se ve la tarjeta. */
+html.overlay,
+html.overlay body,
+html.overlay #root {
+  background: transparent;
+}

@@ -1,20 +1,49 @@
 mod commands;
+mod overlay;
+mod tray;
 
-use tauri::Manager;
+use tauri::{Manager, WindowEvent};
+use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
+
+/// Atajo global para abrir el asistente desde cualquier programa.
+fn assistant_shortcut() -> Shortcut {
+    Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::Space)
+}
 
 /// Punto de entrada de la app. Las acciones nativas viven en commands/ (ver ARCHITECTURE.md §2 y §5).
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         // Debe ir primero: una segunda ejecución trae al frente la ventana ya abierta.
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.unminimize();
-                let _ = window.set_focus();
-            }
-        }))
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| tray::show_main(app)))
         .plugin(tauri_plugin_opener::init())
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(|app, shortcut, event| {
+                    if event.state() == ShortcutState::Pressed && shortcut == &assistant_shortcut() {
+                        overlay::toggle(app);
+                    }
+                })
+                .build(),
+        )
         .manage(commands::login::LoginState::default())
+        .setup(|app| {
+            tray::setup(app.handle())?;
+            // Si otro programa ya usa Ctrl+Alt+Espacio, la app sigue funcionando (por bandeja) sin el atajo.
+            if let Err(error) = app.global_shortcut().register(assistant_shortcut()) {
+                eprintln!("No se pudo registrar el atajo global: {error}");
+            }
+            Ok(())
+        })
+        .on_window_event(|window, event| match (window.label(), event) {
+            // Cerrar la ventana principal la envía a la bandeja; se sale desde el menú de la bandeja.
+            ("main", WindowEvent::CloseRequested { api, .. }) => {
+                api.prevent_close();
+                let _ = window.hide();
+            }
+            (overlay::OVERLAY_LABEL, WindowEvent::Focused(false)) => overlay::on_focus_lost(window.app_handle()),
+            _ => {}
+        })
         .invoke_handler(tauri::generate_handler![
             commands::apps::open_app,
             commands::battery::battery_status,
@@ -23,6 +52,8 @@ pub fn run() {
             commands::keys::volume_key,
             commands::login::login_prepare,
             commands::login::login_wait,
+            overlay::overlay_hide,
+            overlay::overlay_fit,
         ])
         .run(tauri::generate_context!())
         .expect("error al iniciar Scorpk");
