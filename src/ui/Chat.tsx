@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { supabase } from "../data/supabase";
+import { ActionDispatcher } from "../domain/actionDispatcher";
 import { AiInterpreter } from "../domain/aiInterpreter";
 import { CommandProcessor } from "../domain/commandProcessor";
+import { tauriBridge } from "../domain/nativeBridge";
+import { browserNotify, TimerService } from "../domain/timerService";
 import { AI_MODELS, DEFAULT_CHAT_MODEL, type ChatMessage } from "../domain/model";
 import { openExternal, PRICING_URL } from "../util/openExternal";
 
@@ -15,7 +18,7 @@ interface Props {
 const WELCOME: ChatMessage = {
   id: "welcome",
   role: "assistant",
-  text: "¡Hola! Soy Scorpk. Pregúntame lo que quieras; las acciones del PC llegarán pronto.",
+  text: "¡Hola! Soy Scorpk. Puedo abrir programas, controlar el volumen y la música, poner temporizadores y más. Prueba con “abre la calculadora”.",
 };
 
 let nextId = 0;
@@ -30,15 +33,14 @@ export default function Chat({ email, isPro, onRefreshPlan, onSignOut }: Props) 
   const [sessionExpired, setSessionExpired] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  const processor = useMemo(
-    () =>
-      new CommandProcessor(
-        new AiInterpreter({
-          accessToken: async () => (await supabase?.auth.getSession())?.data.session?.access_token ?? null,
-        }),
-      ),
-    [],
-  );
+  const processor = useMemo(() => {
+    const timers = new TimerService({ notify: browserNotify });
+    const dispatcher = new ActionDispatcher({ native: tauriBridge, timers, openUrl: openExternal });
+    const ai = new AiInterpreter({
+      accessToken: async () => (await supabase?.auth.getSession())?.data.session?.access_token ?? null,
+    });
+    return new CommandProcessor(ai, dispatcher);
+  }, []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
