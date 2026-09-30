@@ -6,16 +6,24 @@ export const OAUTH_REDIRECT = "scorpk://auth/callback";
 
 export type OAuthProvider = "google" | "github";
 
+export interface OAuthStart {
+  error: string | null;
+  /** Enlace de login; si el navegador no se pudo abrir, la pantalla lo muestra para copiarlo. */
+  url: string | null;
+  opened: boolean;
+}
+
 /** Abre el login del proveedor en el navegador del sistema (PKCE). El retorno llega por deep link. */
-export async function startOAuth(provider: OAuthProvider): Promise<string | null> {
-  if (!supabase) return "Falta la configuración de Supabase.";
+export async function startOAuth(provider: OAuthProvider): Promise<OAuthStart> {
+  if (!supabase) return { error: "Falta la configuración de Supabase.", url: null, opened: false };
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider,
     options: { redirectTo: OAUTH_REDIRECT, skipBrowserRedirect: true },
   });
-  if (error || !data.url) return error?.message ?? "No se pudo iniciar el login.";
-  await openExternal(data.url);
-  return null;
+  if (error || !data.url) {
+    return { error: error?.message ?? "No se pudo iniciar el login.", url: null, opened: false };
+  }
+  return { error: null, url: data.url, opened: await openExternal(data.url) };
 }
 
 /** Intercambia el código PKCE que llega en scorpk://auth/callback?code=... por una sesión. */

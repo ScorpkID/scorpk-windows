@@ -11,6 +11,7 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
+  const [manualLink, setManualLink] = useState<string | null>(null);
 
   useEffect(() => {
     let unlisten: () => void = () => {};
@@ -49,9 +50,16 @@ export default function Login() {
 
   async function oauth(provider: OAuthProvider) {
     setMessage(null);
-    const error = await startOAuth(provider);
-    if (error) setMessage({ text: error, error: true });
-    else setMessage({ text: "Termina el inicio de sesión en tu navegador y vuelve aquí.", error: false });
+    setManualLink(null);
+    const start = await startOAuth(provider);
+    if (start.error) {
+      setMessage({ text: start.error, error: true });
+    } else if (start.opened) {
+      setMessage({ text: "Termina el inicio de sesión en tu navegador y vuelve aquí.", error: false });
+    } else {
+      setManualLink(start.url);
+      setMessage({ text: "No pude abrir el navegador. Copia este enlace y ábrelo tú:", error: true });
+    }
   }
 
   return (
@@ -106,6 +114,15 @@ export default function Login() {
 
       {message && (
         <p className={`mt-4 text-center text-sm ${message.error ? "text-red-400" : "text-muted"}`}>{message.text}</p>
+      )}
+      {manualLink && (
+        <textarea
+          readOnly
+          value={manualLink}
+          onFocus={(e) => e.currentTarget.select()}
+          rows={3}
+          className="mt-2 w-full resize-none rounded-2xl border border-border bg-card p-3 text-xs text-muted outline-none"
+        />
       )}
 
       <button

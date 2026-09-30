@@ -6,7 +6,7 @@ import type { ActionRequest } from "./model";
 
 function setup(invoke: NativeBridge["invoke"] = async () => undefined as never) {
   const native = { invoke: vi.fn(invoke) } as unknown as NativeBridge & { invoke: ReturnType<typeof vi.fn> };
-  const openUrl = vi.fn(async () => {});
+  const openUrl = vi.fn(async (_url: string) => true);
   const notify = vi.fn();
   const timers = new TimerService({ notify });
   return { dispatcher: new ActionDispatcher({ native, timers, openUrl }), native, openUrl, notify, timers };

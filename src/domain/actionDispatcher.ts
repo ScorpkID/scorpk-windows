@@ -13,7 +13,8 @@ export interface DispatchResult {
 export interface DispatcherDeps {
   native: NativeBridge;
   timers: TimerService;
-  openUrl: (url: string) => Promise<void>;
+  /** Abre la URL en el navegador del sistema; false si no se pudo. */
+  openUrl: (url: string) => Promise<boolean>;
 }
 
 const VOLUME_VALUES = new Set(["up", "down", "mute", "unmute", "max"]);
@@ -137,8 +138,8 @@ export class ActionDispatcher {
   ): Promise<DispatchResult> {
     const query = target?.trim();
     if (!query) return fail(missing);
-    await this.deps.openUrl(build(encodeURIComponent(query.slice(0, 200))));
-    return done(`${speech}.`, speech);
+    const opened = await this.deps.openUrl(build(encodeURIComponent(query.slice(0, 200))));
+    return opened ? done(`${speech}.`, speech) : fail("No pude abrir el navegador.");
   }
 
   private async composeEmail(request: ActionRequest): Promise<DispatchResult> {
@@ -152,7 +153,9 @@ export class ActionDispatcher {
     if (typeof value === "string" && value.trim()) params.set("subject", value.trim().slice(0, 200));
     if (message?.trim()) params.set("body", message.trim().slice(0, 2000));
     const query = params.toString().replace(/\+/g, "%20");
-    await this.deps.openUrl(`mailto:${encodeURIComponent(to)}${query ? `?${query}` : ""}`);
-    return done("Abrí el borrador del correo.", request.feedback_speech || "Abriendo el correo");
+    const opened = await this.deps.openUrl(`mailto:${encodeURIComponent(to)}${query ? `?${query}` : ""}`);
+    return opened
+      ? done("Abrí el borrador del correo.", request.feedback_speech || "Abriendo el correo")
+      : fail("No pude abrir el programa de correo.");
   }
 }
