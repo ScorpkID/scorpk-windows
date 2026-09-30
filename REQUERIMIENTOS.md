@@ -20,7 +20,7 @@ de Android: mismo diseño, misma cuenta, mismo plan.
 | RF-02 | Invocación por **atajo global** (por defecto `Ctrl+Alt+Espacio`, configurable). |
 | RF-03 | Invocación por voz **"Oye Scorpk"** (Vosk offline, coincidencia difusa ≥ 75 %), activable/desactivable desde la bandeja. |
 | RF-04 | **Overlay**: tarjeta flotante sin bordes, transparente, siempre encima, con brillo en los bordes al escuchar; entrada por texto o voz; `Esc` cierra. |
-| RF-05 | Login con email, Google y GitHub (Supabase Auth, PKCE) y retorno a la app por deep link. |
+| RF-05 | Login con email (en la app) y Google/GitHub (navegador + servidor local 127.0.0.1 con código de traspaso de la web; sin cambios en Supabase). |
 | RF-06 | Mostrar el plan del usuario (lectura de `subscriptions`) y enviar a `scorpk.tech/pricing` para suscribirse. |
 | RF-07 | Interpretar órdenes con la IA a través del proxy y ejecutarlas con el contrato JSON `{action, parameters, feedback_speech}`. |
 | RF-08 | Intérprete local por reglas como respaldo y como modo Free. |
@@ -48,7 +48,6 @@ de Android: mismo diseño, misma cuenta, mismo plan.
 | RNF-08 | **Robustez:** ningún error de una acción debe cerrar la app; se muestra un mensaje y se sigue. |
 
 ## 5. Dependencias externas (las gestiona el dueño del proyecto)
-- Supabase: añadir en Authentication → URL Configuration la URL de retorno de Windows (hoy solo está `https://scorpk.tech/auth/callback`).
 - Vercel: el correo de cada tester en `AI_PRO_EMAILS` para probar la IA sin suscripción.
 - Google Cloud: los conectores de Google usan el mismo cliente OAuth; los permisos de Gmail/Drive siguen en verificación.
 - Certificado de firma de código y llave del updater de Tauri.

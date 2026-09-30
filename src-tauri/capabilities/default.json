@@ -8,7 +8,6 @@
     {
       "identifier": "opener:allow-open-url",
       "allow": [{ "url": "https://*" }, { "url": "mailto:*" }]
-    },
-    "deep-link:default"
+    }
   ]
 }

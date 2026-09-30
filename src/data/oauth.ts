@@ -1,50 +1,42 @@
 import { supabase } from "./supabase";
 import { openExternal } from "../util/openExternal";
+import { tauriBridge } from "../domain/nativeBridge";
 
-/** URL a la que vuelve el login de Google/GitHub. Debe estar registrada en Supabase → Auth → URL Configuration. */
-export const OAUTH_REDIRECT = "scorpk://auth/callback";
-
-export type OAuthProvider = "google" | "github";
-
-export interface OAuthStart {
-  error: string | null;
+/**
+ * Login con Google, GitHub o correo en el navegador, sin tocar la lista de Redirect URLs de Supabase.
+ * Es el mismo flujo del CLI de Scorpk (ver src-tauri/src/commands/login.rs): la web devuelve un código
+ * de un solo uso a un servidor local efímero, Rust lo canjea y aquí se fija la sesión.
+ */
+export interface BrowserLogin {
   /** Enlace de login; si el navegador no se pudo abrir, la pantalla lo muestra para copiarlo. */
-  url: string | null;
+  url: string;
   opened: boolean;
+  /** Se resuelve cuando el usuario termina en el navegador: null = sesión iniciada, texto = error. */
+  completion: Promise<string | null>;
 }
 
-/** Abre el login del proveedor en el navegador del sistema (PKCE). El retorno llega por deep link. */
-export async function startOAuth(provider: OAuthProvider): Promise<OAuthStart> {
-  if (!supabase) return { error: "Falta la configuración de Supabase.", url: null, opened: false };
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider,
-    options: { redirectTo: OAUTH_REDIRECT, skipBrowserRedirect: true },
-  });
-  if (error || !data.url) {
-    return { error: error?.message ?? "No se pudo iniciar el login.", url: null, opened: false };
-  }
-  return { error: null, url: data.url, opened: await openExternal(data.url) };
+interface LoginTokens {
+  accessToken: string;
+  refreshToken: string;
 }
 
-/** Intercambia el código PKCE que llega en scorpk://auth/callback?code=... por una sesión. */
-export async function completeOAuth(callbackUrl: string): Promise<string | null> {
-  if (!supabase) return "Falta la configuración de Supabase.";
-  const code = new URL(callbackUrl).searchParams.get("code");
-  if (!code) return "El enlace de retorno no trae código de acceso.";
-  const { error } = await supabase.auth.exchangeCodeForSession(code);
-  return error?.message ?? null;
-}
+export async function startBrowserLogin(): Promise<BrowserLogin> {
+  const { url } = await tauriBridge.invoke<{ url: string }>("login_prepare");
+  const opened = await openExternal(url);
 
-/** Escucha los deep links scorpk://... (solo dentro de Tauri; en el navegador no hace nada). */
-export async function listenForAuthCallback(onResult: (error: string | null) => void): Promise<() => void> {
-  try {
-    const { onOpenUrl } = await import("@tauri-apps/plugin-deep-link");
-    const unlisten = await onOpenUrl((urls) => {
-      const callback = urls.find((url) => url.startsWith(OAUTH_REDIRECT));
-      if (callback) void completeOAuth(callback).then(onResult);
-    });
-    return unlisten;
-  } catch {
-    return () => {};
-  }
+  const completion = (async (): Promise<string | null> => {
+    try {
+      const tokens = await tauriBridge.invoke<LoginTokens>("login_wait");
+      if (!supabase) return "Falta la configuración de Supabase.";
+      const { error } = await supabase.auth.setSession({
+        access_token: tokens.accessToken,
+        refresh_token: tokens.refreshToken,
+      });
+      return error ? "No se pudo iniciar la sesión. Inténtalo de nuevo." : null;
+    } catch (error) {
+      return typeof error === "string" ? error : "No se pudo completar el inicio de sesión.";
+    }
+  })();
+
+  return { url, opened, completion };
 }

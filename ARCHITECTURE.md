@@ -91,8 +91,12 @@ Modelos permitidos (lista blanca del servidor): `accounts/fireworks/models/gpt-o
 | Conectores | REST desde el frontend con tokens leídos de Credential Manager |
 
 ## 6. Datos y cuenta
-- **Supabase Auth** (PKCE): email, Google, GitHub. Retorno por deep link `scorpk://auth/callback` o servidor local en `127.0.0.1`.
-  Hay que registrar la URL en Supabase → Authentication → URL Configuration (hoy solo `https://scorpk.tech/auth/callback`).
+- **Login** (email, Google, GitHub): flujo de traspaso de la web, el mismo del CLI — **no requiere cambios en Supabase**.
+  1. Rust (`commands/login.rs`) abre un servidor local efímero en `127.0.0.1:<puerto libre>`.
+  2. Se abre `https://scorpk.tech/login?from=cli&callback=http://127.0.0.1:<puerto>/callback` en el navegador del sistema.
+  3. Tras el login, la web redirige a `/callback?handoff=<código de un solo uso, 64 hex>`.
+  4. Rust canjea el código en `POST /api/vscode/handoff/consume` (se hace en Rust porque esa ruta no tiene CORS) y el frontend fija la sesión con `supabase.auth.setSession`.
+  Solo el código viaja por la URL (vive 120 s y se borra al primer uso). El correo+contraseña también funciona directo en la app.
 - **Tablas**: `profiles`, `tasks`, `user_connectors`, `subscriptions`. El plan Pro es `plan = 'pro'` con `status ∈ {active, trialing}`.
 - **Tokens** de Google/GitHub: solo en Credential Manager; en la tabla va `access_token = ""`.
 - **Historial** local (SQLite vía `tauri-plugin-sql` o archivo JSON cifrado).

@@ -1,6 +1,7 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { supabase } from "../data/supabase";
-import { listenForAuthCallback, startOAuth, type OAuthProvider } from "../data/oauth";
+import { startBrowserLogin } from "../data/oauth";
+import { NativeUnavailableError } from "../domain/nativeBridge";
 import { openExternal, PRIVACY_URL, TERMS_URL } from "../util/openExternal";
 
 type Mode = "signin" | "signup";
@@ -12,14 +13,6 @@ export default function Login() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
   const [manualLink, setManualLink] = useState<string | null>(null);
-
-  useEffect(() => {
-    let unlisten: () => void = () => {};
-    void listenForAuthCallback((error) => error && setMessage({ text: error, error: true })).then((fn) => {
-      unlisten = fn;
-    });
-    return () => unlisten();
-  }, []);
 
   if (!supabase) {
     return (
@@ -48,17 +41,30 @@ export default function Login() {
     setBusy(false);
   }
 
-  async function oauth(provider: OAuthProvider) {
+  async function browserLogin() {
+    if (busy) return;
+    setBusy(true);
     setMessage(null);
     setManualLink(null);
-    const start = await startOAuth(provider);
-    if (start.error) {
-      setMessage({ text: start.error, error: true });
-    } else if (start.opened) {
-      setMessage({ text: "Termina el inicio de sesión en tu navegador y vuelve aquí.", error: false });
-    } else {
-      setManualLink(start.url);
-      setMessage({ text: "No pude abrir el navegador. Copia este enlace y ábrelo tú:", error: true });
+    try {
+      const login = await startBrowserLogin();
+      if (login.opened) {
+        setMessage({ text: "Termina el inicio de sesión en tu navegador y vuelve aquí.", error: false });
+      } else {
+        setManualLink(login.url);
+        setMessage({ text: "No pude abrir el navegador. Copia este enlace y ábrelo tú:", error: true });
+      }
+      const error = await login.completion;
+      if (error) {
+        setManualLink(null);
+        setMessage({ text: error, error: true });
+      }
+    } catch (error) {
+      const text =
+        error instanceof NativeUnavailableError ? error.message : "No se pudo iniciar el login en el navegador.";
+      setMessage({ text, error: true });
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -97,20 +103,13 @@ export default function Login() {
         <span className="h-px flex-1 bg-border" />o<span className="h-px flex-1 bg-border" />
       </div>
 
-      <div className="flex flex-col gap-2">
-        <button
-          onClick={() => void oauth("google")}
-          className="rounded-2xl border border-border bg-card px-4 py-3 text-sm hover:border-accent"
-        >
-          Continuar con Google
-        </button>
-        <button
-          onClick={() => void oauth("github")}
-          className="rounded-2xl border border-border bg-card px-4 py-3 text-sm hover:border-accent"
-        >
-          Continuar con GitHub
-        </button>
-      </div>
+      <button
+        onClick={() => void browserLogin()}
+        disabled={busy}
+        className="w-full rounded-2xl border border-border bg-card px-4 py-3 text-sm hover:border-accent disabled:opacity-50"
+      >
+        Continuar con Google o GitHub
+      </button>
 
       {message && (
         <p className={`mt-4 text-center text-sm ${message.error ? "text-red-400" : "text-muted"}`}>{message.text}</p>
