@@ -61,7 +61,7 @@ Requisitos: Rust (rustup), Node 20+, MSVC Build Tools, WebView2.
 - **Instalador:** `npm run tauri build`
 - **Pruebas Rust:** `cargo test` (dentro de `src-tauri`)
 - **Pruebas TS:** `npm test`
-- **Tipos / lint:** `npm run typecheck` · `npm run lint`
+- **Tipos:** `npm run typecheck`
 
 ---
 
