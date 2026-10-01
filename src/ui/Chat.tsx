@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { createProcessor } from "../app/processor";
 import { AI_MODELS, DEFAULT_CHAT_MODEL, type ChatMessage } from "../domain/model";
 import { openExternal, PRICING_URL } from "../util/openExternal";
+import VoiceSettings from "./VoiceSettings";
 
 interface Props {
   email: string;
@@ -26,6 +27,7 @@ export default function Chat({ email, isPro, onRefreshPlan, onSignOut }: Props) 
   const [modelId, setModelId] = useState(DEFAULT_CHAT_MODEL.id);
   const [needsPro, setNeedsPro] = useState(false);
   const [sessionExpired, setSessionExpired] = useState(false);
+  const [voiceOpen, setVoiceOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const processor = useMemo(createProcessor, []);
@@ -84,6 +86,9 @@ export default function Chat({ email, isPro, onRefreshPlan, onSignOut }: Props) 
         <span className="ml-auto flex items-center gap-3 text-xs text-muted">
           <span className="rounded-full border border-border px-2 py-0.5">{isPro ? "Pro" : "Free"}</span>
           <span className="hidden sm:inline">{email}</span>
+          <button onClick={() => setVoiceOpen(true)} className="hover:text-white">
+            Voz
+          </button>
           <button onClick={onSignOut} className="hover:text-white">
             Salir
           </button>
@@ -108,6 +113,8 @@ export default function Chat({ email, isPro, onRefreshPlan, onSignOut }: Props) 
           <div ref={bottomRef} />
         </div>
       </main>
+
+      {voiceOpen && <VoiceSettings onClose={() => setVoiceOpen(false)} />}
 
       <form onSubmit={send} className="px-4 pb-4">
         <div className="mx-auto flex max-w-2xl items-center gap-2 rounded-full border border-border bg-card py-2 pl-5 pr-2">

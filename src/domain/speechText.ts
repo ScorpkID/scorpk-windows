@@ -46,11 +46,13 @@ export function pickSpanishVoice(voices: { name: string; lang: string }[]): numb
   return bestScore > 0 ? best : -1;
 }
 
-/** Lee el texto con la voz del sistema. No hace nada si el WebView no soporta síntesis. */
-export function speak(text: string): void {
-  if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+/** Lee el texto con la voz del sistema. `onEnd` se llama al terminar (o de inmediato si no hay nada que leer). */
+export function speak(text: string, onEnd?: () => void): void {
   const spoken = toSpeakable(text);
-  if (!spoken) return;
+  if (typeof window === "undefined" || !("speechSynthesis" in window) || !spoken) {
+    onEnd?.();
+    return;
+  }
   const synth = window.speechSynthesis;
   synth.cancel();
   const utterance = new SpeechSynthesisUtterance(spoken);
@@ -58,6 +60,8 @@ export function speak(text: string): void {
   const index = pickSpanishVoice(voices);
   if (index >= 0) utterance.voice = voices[index];
   utterance.lang = index >= 0 ? voices[index].lang : "es-ES";
+  // onerror también ocurre al cancelar una lectura para empezar otra: solo onend reanuda la escucha.
+  utterance.onend = () => onEnd?.();
   synth.speak(utterance);
 }
 

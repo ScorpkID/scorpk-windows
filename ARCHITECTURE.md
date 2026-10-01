@@ -119,3 +119,13 @@ Modelos permitidos (lista blanca del servidor): `accounts/fireworks/models/gpt-o
 - **Toda versión nueva es obligatoria**: `UpdateGate` bloquea el uso hasta instalar (mismo criterio que Android).
 - Instalador NSIS/MSI firmado con certificado de firma de código; la actualización se verifica con la llave pública del updater.
 - Cuando esté lista, el dueño añade la pestaña de Windows en `scorpk.tech/assistant`.
+
+## 10. Voz ("Oye Scorpk" y dictado) — implementado en `src-tauri/src/voice/`
+- **Motor:** Vosk offline, cargado dinámicamente (`libloading`) desde la carpeta de datos de la app; el instalador de la app no lo incluye.
+- **Instalación (primera vez, ≈55 MB):** `voice_install` descarga `vosk-win64-0.3.45.zip` y `vosk-model-small-es-0.42.zip`, **verifica SHA-256 fijado en el código**, extrae solo 4 DLL por nombre y el modelo sin salirse de su carpeta. Emite `voice-install {stage, percent}`.
+- **Audio:** `cpal` (WASAPI) → mono → `Resampler` a 16 kHz → Vosk. Un hilo por motor; termina (y libera el micrófono) cuando no hay nada que escuchar.
+- **Modos:** `Wake` (busca "Oye Scorpk" con coincidencia difusa ≥ 75 %, port de `WakeWordMatcher.kt`) → `Command` (parciales y frase final) → `Paused` (mientras Scorpk procesa y habla) → `Wake`.
+- **Eventos al frontend:** `voice-wake`, `voice-partial`, `voice-final`, `voice-timeout`, `voice-error`, `voice-ready`.
+- **Comandos:** `voice_status`, `voice_install`, `voice_set_wake`, `voice_listen`, `voice_pause`, `voice_resume`.
+- **Preferencia** de "Oye Scorpk": `localStorage["scorpk.wake"]`, aplicada al iniciar por la ventana del overlay.
+- **Pruebas manuales** (ignoradas por defecto): `SCORPK_VOICE_DIR=... SCORPK_TEST_WAV=... cargo test vosk_reconoce -- --ignored --nocapture` y `cargo test micro_captura -- --ignored --nocapture`.

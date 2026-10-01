@@ -1,6 +1,7 @@
 mod commands;
 mod overlay;
 mod tray;
+mod voice;
 
 use tauri::{Manager, WindowEvent};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
@@ -27,6 +28,7 @@ pub fn run() {
                 .build(),
         )
         .manage(commands::login::LoginState::default())
+        .manage(voice::VoiceState::default())
         .setup(|app| {
             tray::setup(app.handle())?;
             // Si otro programa ya usa Ctrl+Alt+Espacio, la app sigue funcionando (por bandeja) sin el atajo.
@@ -54,6 +56,12 @@ pub fn run() {
             commands::login::login_wait,
             overlay::overlay_hide,
             overlay::overlay_fit,
+            voice::voice_status,
+            voice::voice_install,
+            voice::voice_set_wake,
+            voice::voice_listen,
+            voice::voice_pause,
+            voice::voice_resume,
         ])
         .run(tauri::generate_context!())
         .expect("error al iniciar Scorpk");

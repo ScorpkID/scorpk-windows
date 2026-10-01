@@ -69,6 +69,8 @@ pub fn hide(app: &AppHandle) {
     if let Some(window) = app.get_webview_window(OVERLAY_LABEL) {
         let _ = window.hide();
     }
+    // Al cerrarse el overlay, la voz vuelve a esperar "Oye Scorpk" (o se apaga si no está activa).
+    crate::voice::on_overlay_hidden(app);
 }
 
 pub fn toggle(app: &AppHandle) {
