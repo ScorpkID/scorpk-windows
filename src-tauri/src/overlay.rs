@@ -92,6 +92,14 @@ pub fn on_focus_lost(app: &AppHandle) {
     }
 }
 
+/// Lleva al usuario a los ajustes de voz de la ventana principal (p. ej. para descargar el motor).
+#[tauri::command]
+pub fn open_voice_settings(app: AppHandle) {
+    hide(&app);
+    crate::tray::show_main(&app);
+    let _ = app.emit_to("main", "open-voice-settings", ());
+}
+
 #[tauri::command]
 pub fn overlay_hide(app: AppHandle) {
     hide(&app);

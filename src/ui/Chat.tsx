@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { createProcessor } from "../app/processor";
 import { AI_MODELS, DEFAULT_CHAT_MODEL, type ChatMessage } from "../domain/model";
 import { openExternal, PRICING_URL } from "../util/openExternal";
+import { onVoiceEvent } from "../voice/voiceApi";
 import VoiceSettings from "./VoiceSettings";
 
 interface Props {
@@ -31,6 +32,12 @@ export default function Chat({ email, isPro, onRefreshPlan, onSignOut }: Props) 
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const processor = useMemo(createProcessor, []);
+
+  // El overlay puede pedir abrir los ajustes de voz (p. ej. si falta descargar el motor).
+  useEffect(() => {
+    const unlisten = onVoiceEvent("open-voice-settings", () => setVoiceOpen(true));
+    return () => void unlisten.then((fn) => fn());
+  }, []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });

@@ -15,7 +15,7 @@ import {
 } from "../voice/voiceApi";
 import { openExternal, PRICING_URL } from "../util/openExternal";
 
-type Reply = { text: string; tone: "ok" | "error" | "pro" | "login" };
+type Reply = { text: string; tone: "ok" | "error" | "pro" | "login" | "voice-setup" };
 
 /** Tarjeta flotante del asistente (ventana "overlay"): escribe o habla una orden, Enter para ejecutarla, Esc para cerrar. */
 export default function Overlay() {
@@ -136,10 +136,13 @@ export default function Overlay() {
       setReply(null);
       setListening(true);
     } catch (error) {
-      setReply({
-        text: errorText(error, "No pude usar el micrófono.") + " Actívalo en Scorpk → Voz.",
-        tone: "error",
-      });
+      const text = errorText(error, "No pude usar el micrófono.");
+      // Falta el motor: en vez de un error, se ofrece abrir directamente los ajustes de voz.
+      setReply(
+        text.includes("motor de voz")
+          ? { text: "Para hablarme, primero hay que descargar el reconocimiento de voz (una sola vez, ~55 MB).", tone: "voice-setup" }
+          : { text, tone: "error" },
+      );
     }
   }
 
@@ -164,6 +167,14 @@ export default function Overlay() {
         {reply && (
           <div className="mb-2 px-3 pt-2 text-sm leading-relaxed">
             <p className={`whitespace-pre-wrap ${reply.tone === "error" ? "text-red-400" : ""}`}>{reply.text}</p>
+            {reply.tone === "voice-setup" && (
+              <button
+                onClick={() => void tauriBridge.invoke("open_voice_settings").catch(() => {})}
+                className="mt-2 rounded-full bg-white px-4 py-1.5 text-xs font-semibold text-black"
+              >
+                Abrir ajustes de voz
+              </button>
+            )}
             {reply.tone === "pro" && (
               <button
                 onClick={() => void openExternal(PRICING_URL)}

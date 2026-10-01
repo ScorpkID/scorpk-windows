@@ -56,6 +56,7 @@ pub fn run() {
             commands::login::login_wait,
             overlay::overlay_hide,
             overlay::overlay_fit,
+            overlay::open_voice_settings,
             voice::voice_status,
             voice::voice_install,
             voice::voice_set_wake,
