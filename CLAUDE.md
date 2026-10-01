@@ -46,7 +46,7 @@ Si cambias el contrato JSON o el prompt, anótalo en `ARCHITECTURE.md` y avisa: 
 - **Núcleo nativo:** Rust + crate `windows` (windows-rs)
 - **Cuenta/datos:** Supabase (`@supabase/supabase-js`), proyecto `mbrxjeureeerpyqqhylt`
 - **IA:** proxy `POST https://scorpk.tech/api/ai/chat` (nunca Fireworks directo)
-- **Voz:** Vosk (wake word offline), voces del sistema (TTS)
+- **Voz:** Vosk (wake word offline) + Whisper local (transcripción precisa de órdenes), voces del sistema (TTS)
 - **Secretos locales:** Windows Credential Manager (crate `keyring`)
 - **Updates:** `tauri-plugin-updater` + GitHub Releases
 

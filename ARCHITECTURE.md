@@ -99,10 +99,11 @@ Modelos permitidos (lista blanca del servidor): `accounts/fireworks/models/gpt-o
   Solo el código viaja por la URL (vive 120 s y se borra al primer uso). El correo+contraseña también funciona directo en la app.
 - **Tablas**: `profiles`, `tasks`, `user_connectors`, `subscriptions`. El plan Pro es `plan = 'pro'` con `status ∈ {active, trialing}`.
 - **Tokens** de Google/GitHub: solo en Credential Manager; en la tabla va `access_token = ""`.
-- **Historial** local (SQLite vía `tauri-plugin-sql` o archivo JSON cifrado).
+- **Historial** local, solo en el equipo y por cuenta (`src/data/history.ts`, `localStorage["scorpk.history.<userId>"]`, máx. 100 conversaciones × 200 mensajes), como la base Room local de Android. Nunca se envía ni se registra; se borra desde Configuración.
+- **Preferencias** (`src/data/settings.ts`): `scorpk.voiceReply` (respuesta por voz), `scorpk.chatModel`, `scorpk.wake`. "Iniciar con Windows" usa `tauri-plugin-autostart` (clave Run de HKCU) con `--minimized`: la ventana principal arranca oculta (`visible: false`) y solo se muestra si no viene ese argumento.
 
 ## 7. Interfaz
-- Ventana principal (chat, conectores, ajustes, cuenta) y **ventana overlay** separada (sin bordes, transparente, `alwaysOnTop`, `skipTaskbar`).
+- Ventana principal: menú lateral (Nueva consulta, historial, Configuración, cuenta) + chat o Configuración (voz, inicio con Windows, cuenta, borrar historial). **Ventana overlay** separada (sin bordes, transparente, `alwaysOnTop`, `skipTaskbar`).
 - Overlay: aparece con el atajo/wake word; brillo en bordes mientras escucha; texto o voz; `Esc` cierra.
 - Bandeja: Abrir · Escuchando on/off · Salir.
 - Tema: `#000000` fondo, `#0D0D11` tarjetas, `#1C1C24` bordes, `#8E8E93` texto secundario, 20 px de esquinas.
@@ -123,9 +124,10 @@ Modelos permitidos (lista blanca del servidor): `accounts/fireworks/models/gpt-o
 ## 10. Voz ("Oye Scorpk" y dictado) — implementado en `src-tauri/src/voice/`
 - **Motor:** Vosk offline, cargado dinámicamente (`libloading`) desde la carpeta de datos de la app; el instalador de la app no lo incluye.
 - **Instalación (primera vez, ≈55 MB):** `voice_install` descarga `vosk-win64-0.3.45.zip` y `vosk-model-small-es-0.42.zip`, **verifica SHA-256 fijado en el código**, extrae solo 4 DLL por nombre y el modelo sin salirse de su carpeta. Emite `voice-install {stage, percent}`.
-- **Audio:** `cpal` (WASAPI) → mono → `Resampler` a 16 kHz → Vosk. Un hilo por motor; termina (y libera el micrófono) cuando no hay nada que escuchar.
+- **Transcripción precisa (Whisper):** la misma `voice_install` instala después whisper.cpp **b5130** (`whisper-bin-x64.zip`, 12 DLL por nombre) y `ggml-small-q5_1.bin` (≈190 MB), ambos con SHA-256 fijado, en `voice/whisper/`. whisper.cpp necesita el runtime de Visual C++: `build.rs` copia `msvcp140/vcruntime140/vcruntime140_1/vcomp140.dll` de las Build Tools a `src-tauri/vcrt/` (ignorada por git), viajan como recurso del instalador y se copian junto a `whisper.dll`. FFI en `whisper.rs`: se pasan los structs "por valor" como puntero (ABI de Windows x64) y se valida el layout con los valores por defecto de b5130; si no coincide, se rechaza. Vosk sigue con "Oye Scorpk", el texto en vivo y el fin de frase; al terminar la frase, Whisper la transcribe (`audio_ctx` ajustado a la duración: ~2 s en CPU) y su texto sustituye al de Vosk. Si Whisper no oye voz clara, la orden se descarta (`voice-timeout`); si no está instalado o falla al cargar, vale el texto de Vosk. Se descarga de memoria tras 2 min sin uso.
+- **Audio:** `cpal` (WASAPI) → mono → `Resampler` a 16 kHz (paso bajo Butterworth de 4.º orden a 7 kHz antes de diezmar, para evitar aliasing) → Vosk / Whisper. Un hilo por motor; termina (y libera el micrófono) cuando no hay nada que escuchar.
 - **Modos:** `Wake` (busca "Oye Scorpk" con coincidencia difusa ≥ 75 %, port de `WakeWordMatcher.kt`) → `Command` (parciales y frase final) → `Paused` (mientras Scorpk procesa y habla) → `Wake`.
-- **Eventos al frontend:** `voice-wake`, `voice-partial`, `voice-final`, `voice-timeout`, `voice-error`, `voice-ready`.
+- **Eventos al frontend:** `voice-wake`, `voice-partial`, `voice-transcribing`, `voice-final`, `voice-timeout`, `voice-error`, `voice-ready`.
 - **Comandos:** `voice_status`, `voice_install`, `voice_set_wake`, `voice_listen`, `voice_pause`, `voice_resume`.
 - **Preferencia** de "Oye Scorpk": `localStorage["scorpk.wake"]`, aplicada al iniciar por la ventana del overlay.
-- **Pruebas manuales** (ignoradas por defecto): `SCORPK_VOICE_DIR=... SCORPK_TEST_WAV=... cargo test vosk_reconoce -- --ignored --nocapture` y `cargo test micro_captura -- --ignored --nocapture`.
+- **Pruebas manuales** (ignoradas por defecto): `SCORPK_VOICE_DIR=... SCORPK_TEST_WAV=... cargo test vosk_reconoce -- --ignored --nocapture`, `cargo test micro_captura -- --ignored --nocapture`, `SCORPK_VOICE_DIR=... cargo test instala_whisper -- --ignored` y `SCORPK_WHISPER_DIR=... SCORPK_TEST_WAV=... cargo test --release whisper_transcribe -- --ignored --nocapture`.
