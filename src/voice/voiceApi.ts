@@ -3,12 +3,14 @@ import { tauriBridge } from "../domain/nativeBridge";
 /** Puente con el motor de voz de Rust (src-tauri/src/voice). El audio se procesa en el equipo. */
 export interface VoiceStatus {
   installed: boolean;
+  /** Whisper instalado: las órdenes se transcriben con precisión. */
+  precise: boolean;
   running: boolean;
   wakeEnabled: boolean;
 }
 
 export interface InstallProgress {
-  stage: "motor" | "modelo";
+  stage: "motor" | "modelo" | "preciso-motor" | "preciso-modelo";
   percent: number;
 }
 

@@ -1,4 +1,6 @@
 //! Motor de voz: un hilo que captura el micrófono (cpal/WASAPI), convierte a 16 kHz y alimenta a Vosk.
+//! Si Whisper está instalado, la frase completa de cada orden se vuelve a transcribir con él (mucho
+//! más preciso); Vosk queda para "Oye Scorpk", el texto en vivo y detectar cuándo terminaste de hablar.
 //!
 //! Modos:
 //! - Wake: escucha continua buscando "Oye Scorpk" (todo offline).
@@ -6,7 +8,7 @@
 //! - Paused: micrófono ignorado (mientras Scorpk habla o procesa, para que no se oiga a sí mismo).
 //! - Idle: sin nada que escuchar → el hilo termina y se libera el micrófono.
 
-use super::{ffi::Session, resample::Resampler, wake};
+use super::{ffi::Session, resample::Resampler, wake, whisper::Whisper};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{SampleFormat, Stream};
 use std::path::PathBuf;
@@ -19,6 +21,48 @@ use tauri::{AppHandle, Emitter};
 const NO_SPEECH_TIMEOUT: Duration = Duration::from_secs(10);
 /// Tope de una frase de comando.
 const COMMAND_MAX: Duration = Duration::from_secs(30);
+/// Audio guardado de la frase en curso para Whisper (16 kHz): como mucho los últimos 30 s.
+const UTTERANCE_MAX: usize = 16_000 * 30;
+/// Whisper ocupa ~250 MB de RAM: se descarga si no se usa en este tiempo (se vuelve a cargar en ~0,5 s).
+const WHISPER_IDLE: Duration = Duration::from_secs(120);
+
+/// Rutas de Whisper (carpeta con las DLL, archivo del modelo), si está instalado.
+pub type WhisperPaths = Option<(PathBuf, PathBuf)>;
+
+/// Whisper cargado bajo demanda. Si falla al cargar, no se reintenta: se sigue con el texto de Vosk.
+struct Precise {
+    paths: WhisperPaths,
+    loaded: Option<Whisper>,
+    last_used: Instant,
+}
+
+impl Precise {
+    /// Carga Whisper si hace falta (al empezar una orden, mientras el usuario aún habla).
+    fn preload(&mut self) {
+        if self.loaded.is_none() {
+            if let Some((dir, model)) = self.paths.as_ref() {
+                match Whisper::open(dir, model) {
+                    Ok(whisper) => self.loaded = Some(whisper),
+                    Err(_) => self.paths = None,
+                }
+            }
+        }
+        self.last_used = Instant::now();
+    }
+
+    /// Transcribe con Whisper; `None` si no está disponible (entonces vale el texto de Vosk).
+    fn transcribe(&mut self, pcm: &[i16]) -> Option<String> {
+        self.preload();
+        let audio: Vec<f32> = pcm.iter().map(|&s| s as f32 / 32768.0).collect();
+        self.loaded.as_mut()?.transcribe(&audio).ok()
+    }
+
+    fn unload_if_idle(&mut self) {
+        if self.loaded.is_some() && self.last_used.elapsed() > WHISPER_IDLE {
+            self.loaded = None;
+        }
+    }
+}
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Mode {
@@ -45,12 +89,12 @@ pub struct Engine {
 }
 
 impl Engine {
-    pub fn spawn(app: AppHandle, dll: PathBuf, model: PathBuf, wake_enabled: bool, start_listening: bool) -> Engine {
+    pub fn spawn(app: AppHandle, dll: PathBuf, model: PathBuf, whisper: WhisperPaths, wake_enabled: bool, start_listening: bool) -> Engine {
         let (tx, rx) = mpsc::channel();
         let alive = Arc::new(AtomicBool::new(true));
         let flag = alive.clone();
         std::thread::spawn(move || {
-            if let Err(message) = run(&app, &dll, &model, rx, wake_enabled, start_listening) {
+            if let Err(message) = run(&app, &dll, &model, whisper, rx, wake_enabled, start_listening) {
                 let _ = app.emit("voice-error", message);
             }
             flag.store(false, Ordering::Relaxed);
@@ -98,8 +142,18 @@ fn build_stream(audio_tx: mpsc::Sender<Vec<f32>>) -> Result<(Stream, u32), Strin
     Ok((stream, rate))
 }
 
-fn run(app: &AppHandle, dll: &std::path::Path, model: &std::path::Path, rx: mpsc::Receiver<Cmd>, wake_enabled: bool, start_listening: bool) -> Result<(), String> {
+fn run(
+    app: &AppHandle,
+    dll: &std::path::Path,
+    model: &std::path::Path,
+    whisper: WhisperPaths,
+    rx: mpsc::Receiver<Cmd>,
+    wake_enabled: bool,
+    start_listening: bool,
+) -> Result<(), String> {
     let mut session = Session::open(dll, model)?;
+    let mut precise = Precise { paths: whisper, loaded: None, last_used: Instant::now() };
+    let mut utterance: Vec<i16> = Vec::new();
     let (audio_tx, audio_rx) = mpsc::channel();
     let (stream, rate) = build_stream(audio_tx)?;
     let _keep_stream_alive = &stream; // cpal::Stream no es Send: vive y muere en este hilo.
@@ -133,8 +187,12 @@ fn run(app: &AppHandle, dll: &std::path::Path, model: &std::path::Path, rx: mpsc
             if mode != previous {
                 session.reset();
                 resampler.reset();
+                utterance.clear();
                 command_started = Instant::now();
                 heard_speech = false;
+                if mode == Mode::Command {
+                    precise.preload();
+                }
             }
             if mode == Mode::Idle {
                 return Ok(()); // nada que escuchar: se libera el micrófono
@@ -155,11 +213,15 @@ fn run(app: &AppHandle, dll: &std::path::Path, model: &std::path::Path, rx: mpsc
                 mode = if wake_on { Mode::Wake } else { Mode::Idle };
                 session.reset();
                 resampler.reset();
+                utterance.clear();
                 if mode == Mode::Idle {
                     return Ok(());
                 }
                 continue;
             }
+        }
+        if mode == Mode::Wake {
+            precise.unload_if_idle();
         }
         if chunk.is_empty() || matches!(mode, Mode::Idle | Mode::Paused) {
             continue;
@@ -167,6 +229,10 @@ fn run(app: &AppHandle, dll: &std::path::Path, model: &std::path::Path, rx: mpsc
 
         pcm.clear();
         resampler.process(&chunk, &mut pcm);
+        utterance.extend_from_slice(&pcm);
+        if utterance.len() > UTTERANCE_MAX {
+            utterance.drain(..utterance.len() - UTTERANCE_MAX);
+        }
         let finished = session.accept(&pcm);
 
         match mode {
@@ -179,24 +245,54 @@ fn run(app: &AppHandle, dll: &std::path::Path, model: &std::path::Path, rx: mpsc
                     let _ = app.emit("voice-wake", ());
                     if finished.is_some() && !found.remainder.is_empty() {
                         // "Oye Scorpk abre la calculadora" dicho de corrido: la orden ya viene en la misma frase.
-                        let _ = app.emit("voice-final", found.remainder);
+                        let _ = app.emit("voice-transcribing", ());
+                        let order = precise
+                            .transcribe(&utterance)
+                            .and_then(|t| wake::find(&t))
+                            .map(|m| m.remainder)
+                            .filter(|r| !r.is_empty())
+                            .unwrap_or(found.remainder);
+                        let _ = app.emit("voice-final", order);
                         mode = Mode::Paused;
                     } else {
                         mode = Mode::Command;
+                        precise.preload();
                         command_started = Instant::now();
                         heard_speech = false;
                     }
+                    utterance.clear();
                 } else if finished.is_some() {
                     session.reset();
+                    utterance.clear();
                 }
             }
             Mode::Command => {
-                if let Some(text) = finished {
-                    if !text.is_empty() {
-                        let _ = app.emit("voice-final", text);
-                        mode = Mode::Paused; // la app procesa, habla y luego pide Resume
-                        session.reset();
-                        resampler.reset();
+                if let Some(vosk_text) = finished {
+                    if vosk_text.is_empty() {
+                        utterance.clear(); // ruido o silencio: no arrastrarlo a la orden
+                        continue;
+                    }
+                    let _ = app.emit("voice-transcribing", ());
+                    match precise.transcribe(&utterance) {
+                        // Whisper no oyó una orden clara: era ruido (Vosk a veces "inventa" palabras).
+                        Some(text) if text.is_empty() => {
+                            let _ = app.emit("voice-timeout", ());
+                            mode = if wake_on { Mode::Wake } else { Mode::Idle };
+                        }
+                        Some(text) => {
+                            let _ = app.emit("voice-final", text);
+                            mode = Mode::Paused; // la app procesa, habla y luego pide Resume
+                        }
+                        None => {
+                            let _ = app.emit("voice-final", vosk_text);
+                            mode = Mode::Paused;
+                        }
+                    }
+                    session.reset();
+                    resampler.reset();
+                    utterance.clear();
+                    if mode == Mode::Idle {
+                        return Ok(());
                     }
                 } else {
                     let partial = session.partial();

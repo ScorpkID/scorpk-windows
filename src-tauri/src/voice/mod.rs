@@ -1,10 +1,11 @@
-//! Voz: "Oye Scorpk" y dictado de comandos, 100 % en el equipo (Vosk offline).
-//! El audio no sale del PC. El motor y el modelo se descargan la primera vez (ver installer.rs).
+//! Voz: "Oye Scorpk" y dictado de comandos, 100 % en el equipo (Vosk + Whisper, offline).
+//! El audio no sale del PC. Los motores y modelos se descargan la primera vez (ver installer.rs).
 
 mod engine;
 mod ffi;
 mod installer;
 mod resample;
+mod whisper;
 pub mod wake;
 
 use engine::{Cmd, Engine};
@@ -24,6 +25,8 @@ pub struct VoiceState {
 #[serde(rename_all = "camelCase")]
 pub struct VoiceStatus {
     pub installed: bool,
+    /// Whisper instalado: las órdenes se transcriben con precisión.
+    pub precise: bool,
     pub running: bool,
     pub wake_enabled: bool,
 }
@@ -53,8 +56,12 @@ fn send(app: &AppHandle, state: &VoiceState, cmd: Cmd) -> Result<(), String> {
     if !installer::is_installed(&dir) {
         return Err("Falta descargar el motor de voz.".into());
     }
-    *guard = Some(Engine::spawn(app.clone(), installer::dll_path(&dir), installer::model_dir(&dir), wake_on, start_listening));
+    *guard = Some(Engine::spawn(app.clone(), installer::dll_path(&dir), installer::model_dir(&dir), whisper_paths(&dir), wake_on, start_listening));
     Ok(())
+}
+
+fn whisper_paths(dir: &std::path::Path) -> engine::WhisperPaths {
+    installer::is_whisper_installed(dir).then(|| (installer::whisper_dir(dir), installer::whisper_model(dir)))
 }
 
 fn clone_cmd(cmd: &Cmd) -> Cmd {
@@ -76,24 +83,40 @@ pub fn on_overlay_hidden(app: &AppHandle) {
 
 #[tauri::command]
 pub fn voice_status(app: AppHandle, state: State<VoiceState>) -> Result<VoiceStatus, String> {
-    let installed = installer::is_installed(&voice_dir(&app)?);
+    let dir = voice_dir(&app)?;
+    let installed = installer::is_installed(&dir);
+    let precise = installer::is_whisper_installed(&dir);
     let running = state.engine.lock().map(|g| g.as_ref().is_some_and(|e| e.is_alive())).unwrap_or(false);
     let wake_enabled = state.wake.lock().map(|g| *g).unwrap_or(false);
-    Ok(VoiceStatus { installed, running, wake_enabled })
+    Ok(VoiceStatus { installed, precise, running, wake_enabled })
 }
 
-/// Descarga e instala el motor y el modelo (≈55 MB), emitiendo `voice-install` {stage, percent}.
+/// Descarga e instala lo que falte: Vosk + modelo (≈55 MB) y Whisper + modelo (≈200 MB), emitiendo
+/// `voice-install` {stage, percent}. Si el motor ya corría, se reinicia para que use Whisper.
 #[tauri::command]
-pub async fn voice_install(app: AppHandle) -> Result<(), String> {
+pub async fn voice_install(app: AppHandle, state: State<'_, VoiceState>) -> Result<(), String> {
     let dir = voice_dir(&app)?;
+    let vc_runtime = app.path().resource_dir().map(|d| d.join("vcrt")).map_err(|_| "No encuentro los recursos de la app.".to_string())?;
     let emitter = app.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        installer::install(&dir, |stage, percent| {
+        let progress = |stage: &str, percent: u8| {
             let _ = emitter.emit("voice-install", serde_json::json!({ "stage": stage, "percent": percent }));
-        })
+        };
+        installer::install(&dir, progress)?;
+        installer::install_whisper(&dir, &vc_runtime, progress)
     })
     .await
-    .map_err(|_| "Falló la instalación.".to_string())?
+    .map_err(|_| "Falló la instalación.".to_string())??;
+
+    let restart = {
+        let mut guard = state.engine.lock().map_err(|_| "Estado de voz inválido.".to_string())?;
+        guard.take().map(|engine| engine.tx.send(Cmd::Stop)).is_some()
+    };
+    let wake_on = state.wake.lock().map(|g| *g).unwrap_or(false);
+    if restart && wake_on {
+        send(&app, &state, Cmd::WakeEnabled(true))?;
+    }
+    Ok(())
 }
 
 #[tauri::command]
