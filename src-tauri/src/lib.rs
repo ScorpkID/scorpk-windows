@@ -18,6 +18,10 @@ pub fn run() {
         // Debe ir primero: una segunda ejecución trae al frente la ventana ya abierta.
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| tray::show_main(app)))
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec![commands::autostart::MINIMIZED_ARG]),
+        ))
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, shortcut, event| {
@@ -31,6 +35,10 @@ pub fn run() {
         .manage(voice::VoiceState::default())
         .setup(|app| {
             tray::setup(app.handle())?;
+            // La ventana principal arranca oculta; se muestra salvo al iniciar con Windows (va a la bandeja).
+            if !std::env::args().any(|a| a == commands::autostart::MINIMIZED_ARG) {
+                tray::show_main(app.handle());
+            }
             // Si otro programa ya usa Ctrl+Alt+Espacio, la app sigue funcionando (por bandeja) sin el atajo.
             if let Err(error) = app.global_shortcut().register(assistant_shortcut()) {
                 eprintln!("No se pudo registrar el atajo global: {error}");
@@ -50,6 +58,8 @@ pub fn run() {
             commands::ai::ai_chat,
             commands::apps::open_app,
             commands::apps::list_apps,
+            commands::autostart::autostart_status,
+            commands::autostart::autostart_set,
             commands::battery::battery_status,
             commands::keys::media_key,
             commands::keys::set_volume,

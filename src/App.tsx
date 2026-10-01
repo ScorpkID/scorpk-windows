@@ -1,5 +1,5 @@
 import { useSession } from "./data/useSession";
-import Chat from "./ui/Chat";
+import Home from "./ui/Home";
 import Login from "./ui/Login";
 
 export default function App() {
@@ -8,8 +8,9 @@ export default function App() {
   if (loading) return <div className="h-full" />;
   if (!session) return <Login />;
   return (
-    <Chat
+    <Home
       key={session.user.id}
+      userId={session.user.id}
       email={session.user.email ?? ""}
       isPro={isPro}
       onRefreshPlan={refreshPlan}

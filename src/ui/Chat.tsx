@@ -1,87 +1,98 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { createProcessor } from "../app/processor";
+import { chatModel, setChatModel } from "../data/settings";
 import { AI_MODELS, DEFAULT_CHAT_MODEL, type ChatMessage } from "../domain/model";
 import { openExternal, PRICING_URL } from "../util/openExternal";
-import { onVoiceEvent } from "../voice/voiceApi";
-import VoiceSettings from "./VoiceSettings";
 
 interface Props {
-  email: string;
+  conversationId: string;
+  initialMessages: ChatMessage[];
   isPro: boolean;
   onRefreshPlan: () => Promise<void>;
   onSignOut: () => void;
+  /** Guarda la conversación en el historial tras cada intercambio. */
+  onSave: (id: string, messages: ChatMessage[]) => void;
+  onOpenMenu: () => void;
 }
 
-const WELCOME: ChatMessage = {
-  id: "welcome",
-  role: "assistant",
-  text: "¡Hola! Soy Scorpk. Puedo abrir programas, controlar el volumen y la música, poner temporizadores y más. Prueba con “abre la calculadora”, o pulsa Ctrl+Alt+Espacio desde cualquier programa para abrir el asistente flotante.",
-};
+const WELCOME =
+  "¡Hola! Soy Scorpk. Puedo abrir programas, controlar el volumen y la música, poner temporizadores y más. Prueba con “abre la calculadora”, o pulsa Ctrl+Alt+Espacio desde cualquier programa para abrir el asistente flotante.";
+
+const SUGGESTIONS = ["Abre la calculadora", "Sube el volumen al 50 %", "Pon un temporizador de 5 minutos", "¿Cuánta batería me queda?"];
 
 let nextId = 0;
 const newId = () => `m${Date.now()}-${nextId++}`;
 
-export default function Chat({ email, isPro, onRefreshPlan, onSignOut }: Props) {
-  const [messages, setMessages] = useState<ChatMessage[]>([WELCOME]);
+export default function Chat({ conversationId, initialMessages, isPro, onRefreshPlan, onSignOut, onSave, onOpenMenu }: Props) {
+  const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
-  const [modelId, setModelId] = useState(DEFAULT_CHAT_MODEL.id);
+  const [modelId, setModelId] = useState(() => chatModel().id);
   const [needsPro, setNeedsPro] = useState(false);
   const [sessionExpired, setSessionExpired] = useState(false);
-  const [voiceOpen, setVoiceOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const processor = useMemo(createProcessor, []);
-
-  // El overlay puede pedir abrir los ajustes de voz (p. ej. si falta descargar el motor).
-  useEffect(() => {
-    const unlisten = onVoiceEvent("open-voice-settings", () => setVoiceOpen(true));
-    return () => void unlisten.then((fn) => fn());
-  }, []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, busy]);
 
-  async function send(event: FormEvent) {
-    event.preventDefault();
-    const text = input.trim();
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, [conversationId]);
+
+  async function send(raw: string) {
+    const text = raw.trim();
     if (!text || busy) return;
 
-    const history = messages
-      .filter((m) => m.id !== WELCOME.id && !m.kind)
-      .map((m) => ({ role: m.role, text: m.text }));
+    const history = messages.filter((m) => !m.kind).map((m) => ({ role: m.role, text: m.text }));
+    const withUser = [...messages, { id: newId(), role: "user" as const, text }];
     setInput("");
     setNeedsPro(false);
-    setMessages((prev) => [...prev, { id: newId(), role: "user", text }]);
+    setMessages(withUser);
     setBusy(true);
 
     const model = AI_MODELS.find((m) => m.id === modelId) ?? DEFAULT_CHAT_MODEL;
     const result = await processor.process(text, history, model);
     setBusy(false);
 
+    let reply: ChatMessage | null = null;
     if (result.ok) {
-      setMessages((prev) => [...prev, { id: newId(), role: "assistant", text: result.text, kind: result.kind }]);
-      return;
-    }
-    if (result.error === "pro_required") {
+      reply = { id: newId(), role: "assistant", text: result.text, kind: result.kind };
+    } else if (result.error === "pro_required") {
       setNeedsPro(true);
       void onRefreshPlan();
-      return;
+    } else {
+      if (result.error === "not_signed_in") setSessionExpired(true);
+      reply = { id: newId(), role: "assistant", text: result.text, kind: "error" };
     }
-    if (result.error === "not_signed_in") setSessionExpired(true);
-    setMessages((prev) => [...prev, { id: newId(), role: "assistant", text: result.text, kind: "error" }]);
+    const next = reply ? [...withUser, reply] : withUser;
+    setMessages(next);
+    onSave(conversationId, next);
+  }
+
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    void send(input);
   }
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full min-w-0 flex-col">
       <header className="flex items-center gap-3 border-b border-border px-4 py-3">
-        <img src="/scorpk-icon.png" alt="" className="h-7 w-7 rounded-lg" />
-        <span className="font-semibold">Scorpk</span>
+        <button onClick={onOpenMenu} className="text-muted hover:text-white md:hidden" aria-label="Abrir menú">
+          <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <path d="M4 7h16M4 12h16M4 17h16" />
+          </svg>
+        </button>
         <select
           value={modelId}
-          onChange={(e) => setModelId(e.target.value)}
-          className="ml-2 rounded-full border border-border bg-card px-3 py-1 text-xs text-muted outline-none"
+          onChange={(e) => {
+            setModelId(e.target.value);
+            setChatModel(e.target.value);
+          }}
+          className="rounded-full border border-border bg-card px-3 py-1 text-xs text-muted outline-none"
           aria-label="Modelo de IA"
         >
           {AI_MODELS.map((m) => (
@@ -90,20 +101,27 @@ export default function Chat({ email, isPro, onRefreshPlan, onSignOut }: Props) 
             </option>
           ))}
         </select>
-        <span className="ml-auto flex items-center gap-3 text-xs text-muted">
-          <span className="rounded-full border border-border px-2 py-0.5">{isPro ? "Pro" : "Free"}</span>
-          <span className="hidden sm:inline">{email}</span>
-          <button onClick={() => setVoiceOpen(true)} className="hover:text-white">
-            Voz
-          </button>
-          <button onClick={onSignOut} className="hover:text-white">
-            Salir
-          </button>
-        </span>
+        <span className="ml-auto rounded-full border border-border px-2 py-0.5 text-xs text-muted">{isPro ? "Pro" : "Free"}</span>
       </header>
 
       <main className="flex-1 overflow-y-auto px-4 py-6">
         <div className="mx-auto flex max-w-2xl flex-col gap-3">
+          {messages.length === 0 && (
+            <div className="appear flex flex-col gap-4">
+              <Bubble message={{ id: "welcome", role: "assistant", text: WELCOME }} />
+              <div className="flex flex-wrap gap-2">
+                {SUGGESTIONS.map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => void send(s)}
+                    className="rounded-full border border-border bg-card px-3 py-1.5 text-xs text-muted hover:border-accent hover:text-white"
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {messages.map((message) => (
             <Bubble key={message.id} message={message} />
           ))}
@@ -121,16 +139,22 @@ export default function Chat({ email, isPro, onRefreshPlan, onSignOut }: Props) 
         </div>
       </main>
 
-      {voiceOpen && <VoiceSettings onClose={() => setVoiceOpen(false)} />}
-
-      <form onSubmit={send} className="px-4 pb-4">
-        <div className="mx-auto flex max-w-2xl items-center gap-2 rounded-full border border-border bg-card py-2 pl-5 pr-2">
-          <input
+      <form onSubmit={submit} className="px-4 pb-4">
+        <div className="mx-auto flex max-w-2xl items-end gap-2 rounded-3xl border border-border bg-card py-2 pl-5 pr-2">
+          <textarea
+            ref={inputRef}
             value={input}
+            rows={1}
             onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              // Enter envía; Mayús+Enter hace salto de línea.
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                void send(input);
+              }
+            }}
             placeholder="Escribe un mensaje…"
-            autoFocus
-            className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted"
+            className="max-h-40 flex-1 resize-none bg-transparent py-2 text-sm outline-none field-sizing-content placeholder:text-muted"
           />
           <button
             type="submit"
@@ -153,7 +177,7 @@ function Bubble({ message }: { message: ChatMessage }) {
   return (
     <div className={`appear flex ${isUser ? "justify-end" : "justify-start"}`}>
       <div
-        className={`max-w-[85%] whitespace-pre-wrap rounded-[20px] px-4 py-2.5 text-sm leading-relaxed ${
+        className={`max-w-[85%] select-text whitespace-pre-wrap rounded-card px-4 py-2.5 text-sm leading-relaxed ${
           isUser ? "bg-bubble" : message.kind === "notice" ? "border border-border bg-card text-muted" : "bg-card"
         }`}
       >

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { createProcessor } from "../app/processor";
 import { supabase } from "../data/supabase";
+import { voiceReplyEnabled } from "../data/settings";
 import { DEFAULT_CHAT_MODEL } from "../domain/model";
 import { tauriBridge } from "../domain/nativeBridge";
 import { speak, stopSpeaking } from "../domain/speechText";
@@ -23,6 +24,8 @@ export default function Overlay() {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [listening, setListening] = useState(false);
+  // Whisper está transcribiendo la frase completa (1-2 s): el texto en vivo de Vosk es solo orientativo.
+  const [transcribing, setTranscribing] = useState(false);
   const [reply, setReply] = useState<Reply | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -55,7 +58,8 @@ export default function Overlay() {
       const done = () => void resumeWake().catch(() => {});
       if (result.ok) {
         setReply({ text: result.text, tone: "ok" });
-        speak(result.speech, done);
+        if (voiceReplyEnabled()) speak(result.speech, done);
+        else done();
         return;
       }
       if (result.error === "pro_required") {
@@ -79,6 +83,7 @@ export default function Overlay() {
       setBusy(false);
       busyRef.current = false;
       setListening(false);
+      setTranscribing(false);
       inputRef.current?.focus();
     };
     import("@tauri-apps/api/event")
@@ -96,12 +101,19 @@ export default function Overlay() {
     const unlisteners: Promise<() => void>[] = [
       onVoiceEvent("voice-wake", () => setListening(true)),
       onVoiceEvent<string>("voice-partial", (text) => setInput(text)),
+      onVoiceEvent("voice-transcribing", () => setTranscribing(true)),
       onVoiceEvent<string>("voice-final", (text) => {
+        setTranscribing(false);
         setInput(text);
         void run(text, true);
       }),
-      onVoiceEvent("voice-timeout", () => setListening(false)),
+      onVoiceEvent("voice-timeout", () => {
+        setTranscribing(false);
+        setListening(false);
+        setInput("");
+      }),
       onVoiceEvent<string>("voice-error", (message) => {
+        setTranscribing(false);
         setListening(false);
         setReply({ text: message, tone: "error" });
       }),
@@ -140,7 +152,7 @@ export default function Overlay() {
       // Falta el motor: en vez de un error, se ofrece abrir directamente los ajustes de voz.
       setReply(
         text.includes("motor de voz")
-          ? { text: "Para hablarme, primero hay que descargar el reconocimiento de voz (una sola vez, ~55 MB).", tone: "voice-setup" }
+          ? { text: "Para hablarme, primero hay que descargar el reconocimiento de voz (una sola vez).", tone: "voice-setup" }
           : { text, tone: "error" },
       );
     }
@@ -172,7 +184,7 @@ export default function Overlay() {
                 onClick={() => void tauriBridge.invoke("open_voice_settings").catch(() => {})}
                 className="mt-2 rounded-full bg-white px-4 py-1.5 text-xs font-semibold text-black"
               >
-                Abrir ajustes de voz
+                Abrir configuración de voz
               </button>
             )}
             {reply.tone === "pro" && (
@@ -185,6 +197,7 @@ export default function Overlay() {
             )}
           </div>
         )}
+        {transcribing && <p className="px-3 pb-2 text-sm text-muted">Entendiendo lo que dijiste…</p>}
         {busy && <p className="px-3 pb-2 text-sm text-muted">Pensando…</p>}
         <form onSubmit={submit} className="flex items-center gap-2 rounded-full border border-border bg-black/40 py-1.5 pl-4 pr-1.5">
           <img src="/scorpk-icon.png" alt="" className="h-5 w-5 rounded-md" />

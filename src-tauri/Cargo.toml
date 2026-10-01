@@ -25,6 +25,7 @@ zip = { version = "2", default-features = false, features = ["deflate"] }
 libloading = "0.8"
 cpal = "0.15"
 tauri-plugin-single-instance = "2"
+tauri-plugin-autostart = "2"
 windows = { version = "0.61", features = [
   "Win32_System_Power",
   "Win32_UI_Input_KeyboardAndMouse",
