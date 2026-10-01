@@ -2,7 +2,9 @@
  * Prepara un texto para leerlo en voz alta: sin Markdown, sin bloques de código ni URLs
  * (leer "https dos puntos barra barra..." es ruido). Igual que SpeechOutput en Android.
  */
-const MAX_SPOKEN_CHARS = 400;
+const MAX_SPOKEN_CHARS = 1200;
+/** Cada trozo que se envía a la síntesis: evita que el motor corte lecturas largas. */
+const CHUNK_CHARS = 220;
 
 export function toSpeakable(text: string): string {
   const cleaned = text
@@ -22,6 +24,35 @@ export function toSpeakable(text: string): string {
   const head = cleaned.slice(0, MAX_SPOKEN_CHARS);
   const end = Math.max(head.lastIndexOf(". "), head.lastIndexOf("? "), head.lastIndexOf("! "));
   return (end > 80 ? head.slice(0, end + 1) : head).trim();
+}
+
+/** Parte el texto en trozos de frases (≤ CHUNK_CHARS) sin cortar palabras. */
+export function splitForSpeech(text: string, limit = CHUNK_CHARS): string[] {
+  const sentences = text.match(/[^.!?…]+[.!?…]*\s*/g) ?? [text];
+  const chunks: string[] = [];
+  let current = "";
+  const flush = () => {
+    if (current.trim()) chunks.push(current.trim());
+    current = "";
+  };
+  for (const sentence of sentences) {
+    if (sentence.length > limit) {
+      flush();
+      // Frase larguísima: se parte por palabras.
+      for (const word of sentence.split(/\s+/)) {
+        if ((current + " " + word).trim().length > limit) flush();
+        current = (current + " " + word).trim();
+      }
+      flush();
+    } else if ((current + sentence).length > limit) {
+      flush();
+      current = sentence;
+    } else {
+      current += sentence;
+    }
+  }
+  flush();
+  return chunks;
 }
 
 /** Prefiere voces en español y, entre ellas, las "naturales"/en línea de Windows. */
@@ -55,14 +86,17 @@ export function speak(text: string, onEnd?: () => void): void {
   }
   const synth = window.speechSynthesis;
   synth.cancel();
-  const utterance = new SpeechSynthesisUtterance(spoken);
   const voices = synth.getVoices();
   const index = pickSpanishVoice(voices);
-  if (index >= 0) utterance.voice = voices[index];
-  utterance.lang = index >= 0 ? voices[index].lang : "es-ES";
-  // onerror también ocurre al cancelar una lectura para empezar otra: solo onend reanuda la escucha.
-  utterance.onend = () => onEnd?.();
-  synth.speak(utterance);
+  const chunks = splitForSpeech(spoken);
+  chunks.forEach((chunk, i) => {
+    const utterance = new SpeechSynthesisUtterance(chunk);
+    if (index >= 0) utterance.voice = voices[index];
+    utterance.lang = index >= 0 ? voices[index].lang : "es-ES";
+    // Solo el último trozo reanuda la escucha. (cancel() dispara onerror, no onend, en los demás.)
+    if (i === chunks.length - 1) utterance.onend = () => onEnd?.();
+    synth.speak(utterance);
+  });
 }
 
 export function stopSpeaking(): void {

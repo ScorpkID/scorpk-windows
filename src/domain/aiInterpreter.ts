@@ -26,6 +26,11 @@ const CHAT_MAX_TOKENS = 2500;
 const VOICE_MAX_TOKENS = 600;
 const TIMEOUT_MS = 75_000;
 
+export interface AiMessage {
+  role: "system" | "user" | "assistant";
+  content: string;
+}
+
 export interface AiInterpreterDeps {
   /** Token de acceso de la sesión de Supabase (null si no hay sesión). */
   accessToken: () => Promise<string | null>;
@@ -46,21 +51,32 @@ export class AiInterpreter {
     this.endpoint = deps.endpoint ?? PROXY_ENDPOINT;
   }
 
-  async interpret(input: string, history: ChatTurn[], mode: PromptMode, model: AiModel): Promise<string> {
-    const token = await this.deps.accessToken();
-    if (!token) throw new InterpreterError("not_signed_in", "Inicia sesión para usar la IA.");
-
-    const messages = [
-      { role: "system", content: buildSystemPrompt(mode) },
+  async interpret(
+    input: string,
+    history: ChatTurn[],
+    mode: PromptMode,
+    model: AiModel,
+    fromVoice = false,
+  ): Promise<string> {
+    const messages: AiMessage[] = [
+      { role: "system", content: buildSystemPrompt(mode, new Date(), fromVoice) },
       ...history.slice(-MAX_HISTORY_TURNS).map((turn) => ({ role: turn.role, content: turn.text.slice(0, MAX_TURN_CHARS) })),
       { role: "user", content: input },
     ];
+    return this.complete(messages, mode === "chat" ? CHAT_MAX_TOKENS : VOICE_MAX_TOKENS, model);
+  }
+
+  /** Petición genérica al proxy (respuesta JSON). Lo usan `interpret` y tareas auxiliares como elegir una app. */
+  async complete(messages: AiMessage[], maxTokens: number, model: AiModel): Promise<string> {
+    const token = await this.deps.accessToken();
+    if (!token) throw new InterpreterError("not_signed_in", "Inicia sesión para usar la IA.");
+
     const body = {
       model: model.id,
       messages,
       response_format: { type: "json_object" },
       temperature: 0.1,
-      max_tokens: mode === "chat" ? CHAT_MAX_TOKENS : VOICE_MAX_TOKENS,
+      max_tokens: maxTokens,
     };
 
     let response: Response;

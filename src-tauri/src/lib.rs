@@ -49,6 +49,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::ai::ai_chat,
             commands::apps::open_app,
+            commands::apps::list_apps,
             commands::battery::battery_status,
             commands::keys::media_key,
             commands::keys::set_volume,

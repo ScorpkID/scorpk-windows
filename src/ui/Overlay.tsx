@@ -35,7 +35,7 @@ export default function Overlay() {
 
   /** Ejecuta una orden (escrita o dicha) y lee la respuesta; al terminar vuelve a esperar "Oye Scorpk". */
   const run = useCallback(
-    async (raw: string) => {
+    async (raw: string, fromVoice = false) => {
       const text = raw.trim();
       if (!text || busyRef.current) return;
       busyRef.current = true;
@@ -48,7 +48,7 @@ export default function Overlay() {
       void pauseListening().catch(() => {});
 
       const session = (await supabase?.auth.getSession())?.data.session;
-      const result = await processor.process(text, [], DEFAULT_CHAT_MODEL);
+      const result = await processor.process(text, [], DEFAULT_CHAT_MODEL, { mode: "voice", fromVoice });
       busyRef.current = false;
       setBusy(false);
 
@@ -98,7 +98,7 @@ export default function Overlay() {
       onVoiceEvent<string>("voice-partial", (text) => setInput(text)),
       onVoiceEvent<string>("voice-final", (text) => {
         setInput(text);
-        void run(text);
+        void run(text, true);
       }),
       onVoiceEvent("voice-timeout", () => setListening(false)),
       onVoiceEvent<string>("voice-error", (message) => {

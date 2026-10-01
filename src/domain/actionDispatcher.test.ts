@@ -26,6 +26,19 @@ describe("ActionDispatcher", () => {
     expect(result).toMatchObject({ ok: true, text: "Listo, abrí Google Chrome." });
   });
 
+  it("open_app que no encuentra el programa lo marca como app_not_found", async () => {
+    const { dispatcher } = setup(async () => {
+      throw "No encontré ningún programa llamado «zzz».";
+    });
+    expect(await dispatcher.dispatch(req("open_app", { target: "zzz" }))).toMatchObject({ ok: false, code: "app_not_found" });
+  });
+
+  it("listApps pide la lista a Rust", async () => {
+    const { dispatcher, native } = setup(async () => ["WhatsApp", "Chrome"] as never);
+    expect(await dispatcher.listApps()).toEqual(["WhatsApp", "Chrome"]);
+    expect(native.invoke).toHaveBeenCalledWith("list_apps");
+  });
+
   it("open_app sin nombre pregunta qué abrir", async () => {
     const { dispatcher, native } = setup();
     expect((await dispatcher.dispatch(req("open_app"))).ok).toBe(false);

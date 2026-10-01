@@ -4,6 +4,8 @@ import { formatDuration, type TimerService } from "./timerService";
 
 export interface DispatchResult {
   ok: boolean;
+  /** "app_not_found": no hay ninguna app con ese nombre (el procesador puede pedirle ayuda a la IA). */
+  code?: "app_not_found";
   /** Texto para mostrar al usuario en el chat. */
   text: string;
   /** Texto para leer en voz alta. */
@@ -75,8 +77,15 @@ export class ActionDispatcher {
     } catch (error) {
       if (error instanceof NativeUnavailableError) return fail(error.message);
       const detail = typeof error === "string" ? error : error instanceof Error ? error.message : "";
-      return fail(detail || "No pude completar la acción.");
+      const result = fail(detail || "No pude completar la acción.");
+      if (request.action === "open_app" && detail.startsWith("No encontré")) result.code = "app_not_found";
+      return result;
     }
+  }
+
+  /** Nombres de los programas instalados (para que la IA elija el que el usuario quiso decir). */
+  async listApps(): Promise<string[]> {
+    return this.deps.native.invoke<string[]>("list_apps");
   }
 
   private async openApp(request: ActionRequest): Promise<DispatchResult> {
