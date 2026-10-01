@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { supabase } from "../data/supabase";
 import { startBrowserLogin } from "../data/oauth";
 import { NativeUnavailableError } from "../domain/nativeBridge";
@@ -11,6 +11,9 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
+  // La espera del navegador va aparte: no debe bloquear el login con correo y se puede cancelar.
+  const [waitingBrowser, setWaitingBrowser] = useState(false);
+  const browserAttempt = useRef(0);
   const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
   const [manualLink, setManualLink] = useState<string | null>(null);
 
@@ -27,6 +30,7 @@ export default function Login() {
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!supabase || busy) return;
+    if (waitingBrowser) cancelBrowserLogin();
     setBusy(true);
     setMessage(null);
     const credentials = { email: email.trim(), password };
@@ -42,12 +46,15 @@ export default function Login() {
   }
 
   async function browserLogin() {
-    if (busy) return;
-    setBusy(true);
+    if (busy || waitingBrowser) return;
+    const attempt = ++browserAttempt.current;
+    const current = () => attempt === browserAttempt.current;
+    setWaitingBrowser(true);
     setMessage(null);
     setManualLink(null);
     try {
       const login = await startBrowserLogin();
+      if (!current()) return;
       if (login.opened) {
         setMessage({ text: "Termina el inicio de sesión en tu navegador y vuelve aquí.", error: false });
       } else {
@@ -55,6 +62,7 @@ export default function Login() {
         setMessage({ text: "No pude abrir el navegador. Copia este enlace y ábrelo tú:", error: true });
       }
       const error = await login.completion;
+      if (!current()) return;
       if (error) {
         setManualLink(null);
         setMessage({ text: error, error: true });
@@ -62,10 +70,17 @@ export default function Login() {
     } catch (error) {
       const text =
         error instanceof NativeUnavailableError ? error.message : "No se pudo iniciar el login en el navegador.";
-      setMessage({ text, error: true });
+      if (current()) setMessage({ text, error: true });
     } finally {
-      setBusy(false);
+      if (current()) setWaitingBrowser(false);
     }
+  }
+
+  function cancelBrowserLogin() {
+    browserAttempt.current++;
+    setWaitingBrowser(false);
+    setManualLink(null);
+    setMessage(null);
   }
 
   return (
@@ -105,11 +120,16 @@ export default function Login() {
 
       <button
         onClick={() => void browserLogin()}
-        disabled={busy}
+        disabled={busy || waitingBrowser}
         className="w-full rounded-2xl border border-border bg-card px-4 py-3 text-sm hover:border-accent disabled:opacity-50"
       >
-        Continuar con Google o GitHub
+        {waitingBrowser ? "Esperando al navegador…" : "Continuar con Google o GitHub"}
       </button>
+      {waitingBrowser && (
+        <button onClick={cancelBrowserLogin} className="mt-2 w-full text-center text-xs text-muted hover:text-white">
+          Cancelar
+        </button>
+      )}
 
       {message && (
         <p className={`mt-4 text-center text-sm ${message.error ? "text-red-400" : "text-muted"}`}>{message.text}</p>
