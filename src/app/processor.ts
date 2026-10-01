@@ -1,3 +1,4 @@
+import { createProxyFetch } from "../data/proxyFetch";
 import { supabase } from "../data/supabase";
 import { ActionDispatcher } from "../domain/actionDispatcher";
 import { AiInterpreter } from "../domain/aiInterpreter";
@@ -11,6 +12,7 @@ export function createProcessor(): CommandProcessor {
   const timers = new TimerService({ notify: browserNotify });
   const dispatcher = new ActionDispatcher({ native: tauriBridge, timers, openUrl: openExternal });
   const ai = new AiInterpreter({
+    fetchImpl: createProxyFetch(),
     accessToken: async () => (await supabase?.auth.getSession())?.data.session?.access_token ?? null,
   });
   return new CommandProcessor(ai, dispatcher);
