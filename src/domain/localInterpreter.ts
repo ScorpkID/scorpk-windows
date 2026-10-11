@@ -123,6 +123,94 @@ function parseWeb(text: string): ActionRequest | null {
   return null;
 }
 
+// ─── Control de TV Samsung ──────────────────────────────────────────────────
+
+/** Detecta si la frase contiene una referencia al televisor. */
+const TV_RE = /\b(tele|televisor|tv|samsung|tivi)\b/;
+
+const TV_APPS: Record<string, string> = {
+  netflix: "netflix", nefli: "netflix", neflis: "netflix",
+  youtube: "youtube", yutub: "youtube",
+  spotify: "spotify", espotifai: "spotify", espotify: "spotify",
+  "prime video": "prime_video", "amazon prime": "prime_video", prime: "prime_video",
+  disney: "disney", "disney plus": "disney_plus", "disney+": "disney_plus",
+  "apple tv": "apple_tv",
+  hbo: "hbo", "hbo max": "hbo_max",
+  plex: "plex",
+  twitch: "twitch",
+  deezer: "deezer",
+  navegador: "browser", browser: "browser",
+  crunchyroll: "crunchyroll",
+  tidal: "tidal",
+  movistar: "movistar",
+};
+
+function parseTv(text: string): ActionRequest | null {
+  if (!TV_RE.test(text)) return null;
+
+  // ─ Power ──────────────────────────────────────────────────────────────
+  if (/\b(enciende|encender|prende|prender|activa|activar)\b/.test(text)) {
+    return act("tv_control", { target: "power", value: "on" }, "Encendiendo la tele");
+  }
+  if (/\b(apaga|apagar|desactiva|desactivar)\b/.test(text)) {
+    return act("tv_control", { target: "power", value: "off" }, "Apagando la tele");
+  }
+
+  // ─ Volumen ────────────────────────────────────────────────────────────
+  if (/\b(silencia|silenciar|mutea|mutear|quita el sonido)\b/.test(text)) {
+    return act("tv_control", { target: "volume", value: "mute" }, "Tele silenciada");
+  }
+  if (/\b(activa|quita|restablece) el (sonido|silencio)\b|\bdesilencia\b|\bdesmutea\b/.test(text)) {
+    return act("tv_control", { target: "volume", value: "unmute" }, "Sonido de la tele activado");
+  }
+  if (/\b(sube|subir|aumenta|aumentar|mas)\b.*\b(volumen|sonido)\b/.test(text)) {
+    return act("tv_control", { target: "volume", value: "up" }, "Volumen de la tele arriba");
+  }
+  if (/\b(baja|bajar|disminuye|reduce|menos)\b.*\b(volumen|sonido)\b/.test(text)) {
+    return act("tv_control", { target: "volume", value: "down" }, "Volumen de la tele abajo");
+  }
+
+  // ─ Apps ───────────────────────────────────────────────────────────────
+  for (const [keyword, appValue] of Object.entries(TV_APPS)) {
+    if (text.includes(keyword)) {
+      return act("tv_control", { target: "app", value: appValue }, `Abriendo ${keyword} en la tele`);
+    }
+  }
+
+  // ─ Entradas (HDMI) ────────────────────────────────────────────────────
+  const hdmiMatch = text.match(/\bhdmi\s*(\d)\b/);
+  if (hdmiMatch) {
+    return act("tv_control", { target: "input", value: `hdmi${hdmiMatch[1]}` }, `Cambiando a HDMI ${hdmiMatch[1]}`);
+  }
+  if (/\b(cambia|cambiar|pon|poner)\b.*\b(entrada|fuente|source)\b/.test(text)) {
+    return act("tv_control", { target: "input", value: "hdmi1" }, "Cambiando entrada de la tele");
+  }
+
+  // ─ Reproducción multimedia ────────────────────────────────────────────
+  if (/\b(pausa|pausar|pon pausa|deten|detener)\b/.test(text)) {
+    return act("tv_control", { target: "media", value: "pause" }, "Tele en pausa");
+  }
+  if (/\b(reproduce|reproducir|continua|reanuda|reanudar|dale play|play|dale)\b/.test(text)) {
+    return act("tv_control", { target: "media", value: "play" }, "Reproduciendo en la tele");
+  }
+  if (/\b(siguiente|proxima|salta|saltar)\b/.test(text)) {
+    return act("tv_control", { target: "media", value: "next" }, "Siguiente en la tele");
+  }
+  if (/\b(anterior|previa|regresa|vuelve)\b/.test(text)) {
+    return act("tv_control", { target: "media", value: "previous" }, "Anterior en la tele");
+  }
+
+  // ─ Navegación ─────────────────────────────────────────────────────────
+  if (/\b(menu|inicio|home)\b/.test(text)) {
+    return act("tv_control", { target: "key", value: "home" }, "Inicio de la tele");
+  }
+  if (/\b(atras|volver|regresa)\b/.test(text)) {
+    return act("tv_control", { target: "key", value: "back" }, "Atrás en la tele");
+  }
+
+  return null;
+}
+
 function parseOpen(text: string): ActionRequest | null {
   const match = text.match(/^(?:abre|abrir|abreme|lanza|lanzar|inicia|iniciar|ejecuta|ejecutar|arranca)\s+(?:la |el |los |las |mi )?(?:aplicacion |app |programa )?(?:de )?(.+)$/);
   if (!match) return null;
@@ -136,6 +224,7 @@ export function interpretLocally(input: string): ActionRequest | null {
   const text = stripCourtesy(normalize(input));
   if (!text) return null;
   return (
+    parseTv(text) ??
     parseTimer(text) ??
     parseVolume(text) ??
     parseBattery(text) ??

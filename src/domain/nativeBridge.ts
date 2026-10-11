@@ -24,3 +24,22 @@ export interface BatteryInfo {
   charging: boolean;
   hasBattery: boolean;
 }
+
+export interface TvResult {
+  ok: boolean;
+  message?: string | null;
+  error?: string | null;
+}
+
+export interface TvConfig {
+  ip: string;
+  mac: string;
+  port: number;
+  configured: boolean;
+}
+
+export interface TvDepsStatus {
+  python_found: boolean;
+  python_path: string | null;
+  samsungtvws_installed: boolean;
+}

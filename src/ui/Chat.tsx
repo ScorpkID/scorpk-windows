@@ -3,6 +3,7 @@ import { createProcessor } from "../app/processor";
 import { AI_MODELS, DEFAULT_CHAT_MODEL, type ChatMessage } from "../domain/model";
 import { openExternal, PRICING_URL } from "../util/openExternal";
 import { onVoiceEvent } from "../voice/voiceApi";
+import TvSettings from "./TvSettings";
 import VoiceSettings from "./VoiceSettings";
 
 interface Props {
@@ -29,6 +30,7 @@ export default function Chat({ email, isPro, onRefreshPlan, onSignOut }: Props) 
   const [needsPro, setNeedsPro] = useState(false);
   const [sessionExpired, setSessionExpired] = useState(false);
   const [voiceOpen, setVoiceOpen] = useState(false);
+  const [tvOpen, setTvOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const processor = useMemo(createProcessor, []);
@@ -96,6 +98,9 @@ export default function Chat({ email, isPro, onRefreshPlan, onSignOut }: Props) 
           <button onClick={() => setVoiceOpen(true)} className="hover:text-white">
             Voz
           </button>
+          <button onClick={() => setTvOpen(true)} className="hover:text-white">
+            📺 TV
+          </button>
           <button onClick={onSignOut} className="hover:text-white">
             Salir
           </button>
@@ -122,6 +127,7 @@ export default function Chat({ email, isPro, onRefreshPlan, onSignOut }: Props) 
       </main>
 
       {voiceOpen && <VoiceSettings onClose={() => setVoiceOpen(false)} />}
+      {tvOpen && <TvSettings onClose={() => setTvOpen(false)} />}
 
       <form onSubmit={send} className="px-4 pb-4">
         <div className="mx-auto flex max-w-2xl items-center gap-2 rounded-full border border-border bg-card py-2 pl-5 pr-2">

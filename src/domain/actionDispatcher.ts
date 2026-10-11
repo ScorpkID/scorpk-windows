@@ -1,5 +1,5 @@
 import type { ActionRequest } from "./model";
-import { NativeUnavailableError, type BatteryInfo, type NativeBridge } from "./nativeBridge";
+import { NativeUnavailableError, type BatteryInfo, type NativeBridge, type TvResult } from "./nativeBridge";
 import { formatDuration, type TimerService } from "./timerService";
 
 export interface DispatchResult {
@@ -71,6 +71,8 @@ export class ActionDispatcher {
           );
         case "compose_email":
           return await this.composeEmail(request);
+        case "tv_control":
+          return await this.tvControl(request);
         default:
           return fail("Eso todavía no lo puedo hacer en Windows.");
       }
@@ -166,5 +168,26 @@ export class ActionDispatcher {
     return opened
       ? done("Abrí el borrador del correo.", request.feedback_speech || "Abriendo el correo")
       : fail("No pude abrir el programa de correo.");
+  }
+
+  private async tvControl(request: ActionRequest): Promise<DispatchResult> {
+    const command = request.parameters.target?.trim();
+    const value = typeof request.parameters.value === "string" ? request.parameters.value.trim() : null;
+    if (!command) return fail("¿Qué quieres que haga en la tele?");
+
+    const validCommands = new Set(["power", "volume", "app", "input", "media", "key"]);
+    if (!validCommands.has(command)) return fail(`Comando de TV no reconocido: ${command}.`);
+
+    try {
+      const result = await this.deps.native.invoke<TvResult>("tv_execute", { command, value });
+      if (result.ok) {
+        return done(result.message ?? "Listo.", request.feedback_speech || result.message || "Listo");
+      }
+      return fail(result.error ?? "No pude controlar la tele.");
+    } catch (error) {
+      if (error instanceof NativeUnavailableError) return fail(error.message);
+      const msg = typeof error === "string" ? error : error instanceof Error ? error.message : "Error desconocido.";
+      return fail(msg);
+    }
   }
 }

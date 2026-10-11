@@ -41,6 +41,18 @@ describe("interpretLocally", () => {
     expect(pick("llévame al aeropuerto")).toMatchObject({ action: "navigate", target: "aeropuerto" });
   });
 
+  it("control de televisor Samsung", () => {
+    expect(pick("enciende la tele")).toMatchObject({ action: "tv_control", target: "power", value: "on" });
+    expect(pick("apaga la tv")).toMatchObject({ action: "tv_control", target: "power", value: "off" });
+    expect(pick("sube el volumen de la tele")).toMatchObject({ action: "tv_control", target: "volume", value: "up" });
+    expect(pick("baja el volumen de la tele")).toMatchObject({ action: "tv_control", target: "volume", value: "down" });
+    expect(pick("silencia la tele")).toMatchObject({ action: "tv_control", target: "volume", value: "mute" });
+    expect(pick("abre netflix en la tele")).toMatchObject({ action: "tv_control", target: "app", value: "netflix" });
+    expect(pick("pon spotify en la tele")).toMatchObject({ action: "tv_control", target: "app", value: "spotify" });
+    expect(pick("cambia a hdmi 1 en la tele")).toMatchObject({ action: "tv_control", target: "input", value: "hdmi1" });
+    expect(pick("pausa la tele")).toMatchObject({ action: "tv_control", target: "media", value: "pause" });
+  });
+
   it("lo que no entiende devuelve null para pasarlo a la IA", () => {
     expect(interpretLocally("¿quién pintó la Mona Lisa?")).toBeNull();
     expect(interpretLocally("cuéntame un chiste")).toBeNull();

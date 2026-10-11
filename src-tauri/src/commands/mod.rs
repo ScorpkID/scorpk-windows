@@ -6,3 +6,4 @@ pub mod apps;
 pub mod battery;
 pub mod keys;
 pub mod login;
+pub mod samsung_tv;
