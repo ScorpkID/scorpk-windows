@@ -3,6 +3,7 @@ import { createProcessor } from "../app/processor";
 import { chatModel, setChatModel } from "../data/settings";
 import { AI_MODELS, DEFAULT_CHAT_MODEL, type ChatMessage } from "../domain/model";
 import { openExternal, PRICING_URL } from "../util/openExternal";
+import TvSettings from "./TvSettings";
 
 interface Props {
   conversationId: string;
@@ -30,6 +31,7 @@ export default function Chat({ conversationId, initialMessages, isPro, onRefresh
   const [modelId, setModelId] = useState(() => chatModel().id);
   const [needsPro, setNeedsPro] = useState(false);
   const [sessionExpired, setSessionExpired] = useState(false);
+  const [tvOpen, setTvOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -101,7 +103,16 @@ export default function Chat({ conversationId, initialMessages, isPro, onRefresh
             </option>
           ))}
         </select>
-        <span className="ml-auto rounded-full border border-border px-2 py-0.5 text-xs text-muted">{isPro ? "Pro" : "Free"}</span>
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            onClick={() => setTvOpen(true)}
+            className="rounded-full border border-border px-2.5 py-1 text-xs text-muted hover:border-accent hover:text-white"
+            title="Ajustes de televisor Samsung"
+          >
+            📺 TV
+          </button>
+          <span className="rounded-full border border-border px-2 py-0.5 text-xs text-muted">{isPro ? "Pro" : "Free"}</span>
+        </div>
       </header>
 
       <main className="flex-1 overflow-y-auto px-4 py-6">
@@ -138,6 +149,8 @@ export default function Chat({ conversationId, initialMessages, isPro, onRefresh
           <div ref={bottomRef} />
         </div>
       </main>
+
+      {tvOpen && <TvSettings onClose={() => setTvOpen(false)} />}
 
       <form onSubmit={submit} className="px-4 pb-4">
         <div className="mx-auto flex max-w-2xl items-end gap-2 rounded-3xl border border-border bg-card py-2 pl-5 pr-2">

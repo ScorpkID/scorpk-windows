@@ -1,0 +1,223 @@
+#!/usr/bin/env python3
+"""
+Samsung TV Controller para Scorpk
+==================================
+Puente entre Rust (Tauri) y samsungtvws para controlar televisores Samsung Tizen.
+
+Uso:
+    python samsung_controller.py '{"ip":"192.168.1.50","command":"power","value":"on",...}'
+
+Entrada (JSON como primer argumento):
+    ip          – IP del televisor (requerido)
+    port        – puerto WebSocket (por defecto 8002)
+    token_file  – ruta al archivo de token de autorización
+    command     – power | volume | app | input | media | key | pair | check
+    value       – valor específico del comando
+    extra       – parámetro adicional (ej. búsqueda dentro de una app)
+
+Salida (JSON por stdout):
+    {"ok": true,  "message": "..."}
+    {"ok": false, "error": "..."}
+"""
+
+from __future__ import annotations
+
+import json
+import sys
+import time
+
+# ─── IDs de apps de Tizen conocidas ─────────────────────────────────────────
+
+TIZEN_APPS: dict[str, str] = {
+    "netflix":       "3201907018807",
+    "youtube":       "111299001912",
+    "spotify":       "3201606009684",
+    "prime_video":   "3201910019365",
+    "prime":         "3201910019365",
+    "amazon_prime":  "3201910019365",
+    "disney":        "3201901017640",
+    "disney_plus":   "3201901017640",
+    "apple_tv":      "3201807016597",
+    "browser":       "3202010022079",
+    "plex":          "3201512006963",
+    "hbo":           "3201601007230",
+    "hbo_max":       "3201601007230",
+    "twitch":        "3201909019271",
+    "deezer":        "3201608010191",
+    "rakuten":       "3201511006428",
+    "tv_plus":       "3201710015037",
+    "movistar":      "3201804012178",
+    "tidal":         "3201805016367",
+    "crunchyroll":   "3201412000295",
+}
+
+# ─── Mapas de teclas ────────────────────────────────────────────────────────
+
+INPUT_KEYS: dict[str, str] = {
+    "hdmi1": "KEY_HDMI1",
+    "hdmi2": "KEY_HDMI2",
+    "hdmi3": "KEY_HDMI3",
+    "hdmi4": "KEY_HDMI4",
+    "hdmi":  "KEY_HDMI",
+    "tv":    "KEY_TV",
+    "dtv":   "KEY_DTV",
+}
+
+MEDIA_KEYS: dict[str, str] = {
+    "play":       "KEY_PLAY",
+    "pause":      "KEY_PAUSE",
+    "play_pause": "KEY_PAUSE",
+    "stop":       "KEY_STOP",
+    "next":       "KEY_FF",
+    "previous":   "KEY_REWIND",
+}
+
+NAV_KEYS: dict[str, str] = {
+    "home":  "KEY_HOME",
+    "back":  "KEY_RETURN",
+    "menu":  "KEY_MENU",
+    "up":    "KEY_UP",
+    "down":  "KEY_DOWN",
+    "left":  "KEY_LEFT",
+    "right": "KEY_RIGHT",
+    "enter": "KEY_ENTER",
+}
+
+
+# ─── Ejecución de comandos ──────────────────────────────────────────────────
+
+def ok(message: str) -> dict:
+    return {"ok": True, "message": message}
+
+
+def err(message: str) -> dict:
+    return {"ok": False, "error": message}
+
+
+def execute(tv, command: str, value: str | None, extra: str | None) -> dict:  # noqa: C901
+    """Despacha un comando al televisor y devuelve el resultado como dict."""
+
+    if command == "power":
+        if value == "off":
+            tv.send_key("KEY_POWER")
+            return ok("Televisor apagado.")
+        # "on" se maneja primero con WoL en Rust; este send_key es un fallback.
+        tv.send_key("KEY_POWER")
+        return ok("Televisor encendido.")
+
+    if command == "volume":
+        if value == "up":
+            tv.send_key("KEY_VOLUP")
+            return ok("Volumen de la tele arriba.")
+        if value == "down":
+            tv.send_key("KEY_VOLDOWN")
+            return ok("Volumen de la tele abajo.")
+        if value in ("mute", "unmute"):
+            tv.send_key("KEY_MUTE")
+            return ok("Televisor silenciado." if value == "mute" else "Sonido del televisor activado.")
+        return err(f"Valor de volumen no reconocido: {value}")
+
+    if command == "app":
+        if not value:
+            return err("No se indicó qué app abrir.")
+        app_key = value.lower().strip().replace(" ", "_").replace("+", "_plus")
+        app_id = TIZEN_APPS.get(app_key)
+        if not app_id:
+            names = ", ".join(sorted(TIZEN_APPS.keys()))
+            return err(f"No conozco la app '{value}'. Apps disponibles: {names}")
+        try:
+            tv.run_app(app_id)
+            return ok(f"Abriendo {value} en la TV.")
+        except Exception as exc:
+            return err(f"No pude abrir {value}: {exc}")
+
+    if command == "input":
+        if not value:
+            return err("No se indicó la entrada (hdmi1, hdmi2…).")
+        key = INPUT_KEYS.get(value.lower().replace(" ", ""))
+        if not key:
+            return err(f"Entrada no reconocida: {value}. Usa: {', '.join(INPUT_KEYS.keys())}.")
+        tv.send_key(key)
+        return ok(f"Entrada cambiada a {value}.")
+
+    if command == "media":
+        if not value:
+            return err("No se indicó la acción multimedia.")
+        key = MEDIA_KEYS.get(value)
+        if not key:
+            return err(f"Control multimedia no reconocido: {value}.")
+        tv.send_key(key)
+        return ok(f"TV: {value}.")
+
+    if command == "key":
+        if not value:
+            return err("No se indicó la tecla.")
+        key = NAV_KEYS.get(value)
+        if not key:
+            return err(f"Tecla no reconocida: {value}.")
+        tv.send_key(key)
+        return ok(f"Tecla {value} enviada.")
+
+    if command == "pair":
+        # Solo conectar dispara el diálogo de autorización en la pantalla del televisor.
+        tv.open()
+        time.sleep(2)
+        tv.close()
+        return ok("Vinculación iniciada. Acepta en la pantalla del televisor.")
+
+    if command == "check":
+        tv.open()
+        tv.close()
+        return ok("Conexión exitosa con el televisor.")
+
+    return err(f"Comando no reconocido: {command}")
+
+
+# ─── Punto de entrada ───────────────────────────────────────────────────────
+
+def main() -> None:
+    if len(sys.argv) < 2:
+        print(json.dumps(err("Falta el argumento JSON con la acción.")))
+        sys.exit(1)
+
+    try:
+        req: dict = json.loads(sys.argv[1])
+    except (json.JSONDecodeError, ValueError):
+        print(json.dumps(err("JSON inválido.")))
+        sys.exit(1)
+
+    ip: str | None = req.get("ip")
+    if not ip:
+        print(json.dumps(err("Falta la IP del televisor.")))
+        sys.exit(1)
+
+    # Importar aquí para que los errores de dependencia se reporten limpiamente.
+    try:
+        from samsungtvws import SamsungTVWS  # type: ignore[import-untyped]
+    except ImportError:
+        print(json.dumps(err("La librería 'samsungtvws' no está instalada. Ejecuta: pip install samsungtvws")))
+        sys.exit(1)
+
+    port: int = int(req.get("port", 8002))
+    token_file: str | None = req.get("token_file")
+    command: str = req.get("command", "")
+    value: str | None = req.get("value")
+    extra: str | None = req.get("extra")
+
+    try:
+        tv = SamsungTVWS(host=ip, port=port, token_file=token_file, name="Scorpk")
+        result = execute(tv, command, value, extra)
+    except ConnectionRefusedError:
+        result = err("No se pudo conectar con la TV. ¿Está encendida y en la misma red?")
+    except TimeoutError:
+        result = err("La TV no respondió a tiempo. ¿Está encendida y en la misma red?")
+    except OSError as exc:
+        result = err(f"Error de red: {exc}")
+    except Exception as exc:
+        result = err(f"Error inesperado: {exc}")
+
+    print(json.dumps(result, ensure_ascii=False))
+
+
+if __name__ == "__main__":
+    main()

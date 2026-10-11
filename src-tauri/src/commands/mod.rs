@@ -7,3 +7,4 @@ pub mod autostart;
 pub mod battery;
 pub mod keys;
 pub mod login;
+pub mod samsung_tv;

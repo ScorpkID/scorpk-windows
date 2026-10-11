@@ -50,13 +50,25 @@ scorpk-windows/
 La IA responde **solo** con:
 ```json
 {
-  "action": "open_app | media_control | volume_control | spotify_control | set_timer | set_alarm | battery_status | global_action | read_screen | click_node | gesture | calendar_query | calendar_create | drive_search | gmail_inbox | github_query | youtube_search | navigate | compose_email | whatsapp_message | call_contact | respond_chat | unknown",
+  "action": "open_app | media_control | volume_control | spotify_control | set_timer | set_alarm | battery_status | global_action | read_screen | click_node | gesture | calendar_query | calendar_create | drive_search | gmail_inbox | github_query | youtube_search | navigate | compose_email | tv_control | whatsapp_message | call_contact | respond_chat | unknown",
   "parameters": { "target": "string", "value": "string | number | boolean", "message": "string" },
   "feedback_speech": "Texto breve que Scorpk dirá en voz alta"
 }
 ```
 Las acciones exactas están en `ActionRequest.kt` del móvil. Cambios al contrato se anotan aquí y se avisa.
 `toggle_flashlight` no aplica en PC (RF-18: responder con aviso).
+
+### `tv_control` — Control de televisor Samsung (Tizen)
+```
+target = "power" | "volume" | "app" | "input" | "media" | "key"
+power  → value = "on" | "off"
+volume → value = "up" | "down" | "mute" | "unmute"
+app    → value = nombre de la app ("netflix", "youtube", "spotify", "prime_video", "disney", …)
+input  → value = "hdmi1" | "hdmi2" | "hdmi3" | "hdmi4" | "tv"
+media  → value = "play" | "pause" | "stop" | "next" | "previous"
+key    → value = "home" | "back" | "menu" | "up" | "down" | "left" | "right" | "enter"
+```
+Palabras clave del usuario: "tele", "televisor", "tv", "Samsung".
 
 ## 4. Flujo de una orden
 1. Entrada (texto, voz tras el atajo, o wake word "Oye Scorpk") → `CommandProcessor`.
@@ -88,6 +100,7 @@ Modelos permitidos (lista blanca del servidor): `accounts/fireworks/models/gpt-o
 | `read_screen` | UI Automation (árbol de la ventana activa) y/o captura (Graphics Capture) → modelo de visión |
 | `click_node`, `gesture` | UI Automation `InvokePattern`; alternativa `SendInput`; siempre con confirmación |
 | `global_action` | Atajos del sistema (minimizar, escritorio, bloquear, capturar) |
+| `tv_control` | Samsung Tizen: WoL nativo UDP (Rust) + WebSocket (`samsungtvws` en Python) para power, apps, volumen, HDMI y media |
 | Conectores | REST desde el frontend con tokens leídos de Credential Manager |
 
 ## 6. Datos y cuenta
