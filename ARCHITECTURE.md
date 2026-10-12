@@ -101,6 +101,7 @@ Modelos permitidos (lista blanca del servidor): `accounts/fireworks/models/gpt-o
 | `click_node`, `gesture` | UI Automation `InvokePattern`; alternativa `SendInput`; siempre con confirmación |
 | `global_action` | Atajos del sistema (minimizar, escritorio, bloquear, capturar) |
 | `tv_control` | Samsung Tizen: WoL nativo UDP (Rust) + WebSocket (`samsungtvws` en Python) para power, apps, volumen, HDMI y media |
+| `phone_control` | Google ARTEMIS / ADB (Android): tareas y lanzamiento de apps en el celular conectado por USB o Wi-Fi |
 | Conectores | REST desde el frontend con tokens leídos de Credential Manager |
 
 ## 6. Datos y cuenta

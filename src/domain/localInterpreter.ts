@@ -211,6 +211,24 @@ function parseTv(text: string): ActionRequest | null {
   return null;
 }
 
+// ─── Control de Celular / Teléfono (ARTEMIS / ADB) ─────────────────────────
+
+const PHONE_RE = /\b(celular|cel|telefono|movil|smartphone)\b/;
+
+function parsePhone(text: string): ActionRequest | null {
+  if (!PHONE_RE.test(text)) return null;
+
+  // Si pide abrir una app específica en el celular
+  const openMatch = text.match(/\b(?:abre|abrir|pon|lanzar)\s+([a-z0-9_\s]+?)\s+(?:en\s+(?:el|mi)\s+(?:celular|cel|telefono|movil))\b/);
+  if (openMatch) {
+    const app = openMatch[1].trim();
+    return act("phone_control", { target: "app", value: `abre ${app}` }, `Abriendo ${app} en tu celular`);
+  }
+
+  // Cualquier otra orden explícita para el celular
+  return act("phone_control", { target: "task", value: text }, "Enviando orden a tu celular");
+}
+
 function parseOpen(text: string): ActionRequest | null {
   const match = text.match(/^(?:abre|abrir|abreme|lanza|lanzar|inicia|iniciar|ejecuta|ejecutar|arranca)\s+(?:la |el |los |las |mi )?(?:aplicacion |app |programa )?(?:de )?(.+)$/);
   if (!match) return null;
@@ -224,6 +242,7 @@ export function interpretLocally(input: string): ActionRequest | null {
   const text = stripCourtesy(normalize(input));
   if (!text) return null;
   return (
+    parsePhone(text) ??
     parseTv(text) ??
     parseTimer(text) ??
     parseVolume(text) ??

@@ -3,6 +3,7 @@ import { createProcessor } from "../app/processor";
 import { chatModel, setChatModel } from "../data/settings";
 import { AI_MODELS, DEFAULT_CHAT_MODEL, type ChatMessage } from "../domain/model";
 import { openExternal, PRICING_URL } from "../util/openExternal";
+import PhoneSettings from "./PhoneSettings";
 import TvSettings from "./TvSettings";
 
 interface Props {
@@ -32,6 +33,7 @@ export default function Chat({ conversationId, initialMessages, isPro, onRefresh
   const [needsPro, setNeedsPro] = useState(false);
   const [sessionExpired, setSessionExpired] = useState(false);
   const [tvOpen, setTvOpen] = useState(false);
+  const [phoneOpen, setPhoneOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -111,6 +113,13 @@ export default function Chat({ conversationId, initialMessages, isPro, onRefresh
           >
             📺 TV
           </button>
+          <button
+            onClick={() => setPhoneOpen(true)}
+            className="rounded-full border border-border px-2.5 py-1 text-xs text-muted hover:border-accent hover:text-white"
+            title="Control de celular Android (ARTEMIS)"
+          >
+            📱 Celular
+          </button>
           <span className="rounded-full border border-border px-2 py-0.5 text-xs text-muted">{isPro ? "Pro" : "Free"}</span>
         </div>
       </header>
@@ -151,6 +160,7 @@ export default function Chat({ conversationId, initialMessages, isPro, onRefresh
       </main>
 
       {tvOpen && <TvSettings onClose={() => setTvOpen(false)} />}
+      {phoneOpen && <PhoneSettings onClose={() => setPhoneOpen(false)} />}
 
       <form onSubmit={submit} className="px-4 pb-4">
         <div className="mx-auto flex max-w-2xl items-end gap-2 rounded-3xl border border-border bg-card py-2 pl-5 pr-2">

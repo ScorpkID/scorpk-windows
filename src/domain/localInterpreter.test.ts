@@ -53,6 +53,12 @@ describe("interpretLocally", () => {
     expect(pick("pausa la tele")).toMatchObject({ action: "tv_control", target: "media", value: "pause" });
   });
 
+  it("control de celular Android (ARTEMIS)", () => {
+    expect(pick("abre whatsapp en mi celular")).toMatchObject({ action: "phone_control", target: "app" });
+    expect(pick("pide un uber en mi telefono")).toMatchObject({ action: "phone_control", target: "task" });
+    expect(pick("abre instagram en el cel")).toMatchObject({ action: "phone_control", target: "app" });
+  });
+
   it("lo que no entiende devuelve null para pasarlo a la IA", () => {
     expect(interpretLocally("¿quién pintó la Mona Lisa?")).toBeNull();
     expect(interpretLocally("cuéntame un chiste")).toBeNull();

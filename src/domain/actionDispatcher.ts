@@ -1,5 +1,5 @@
 import type { ActionRequest } from "./model";
-import { NativeUnavailableError, type BatteryInfo, type NativeBridge, type TvResult } from "./nativeBridge";
+import { NativeUnavailableError, type BatteryInfo, type NativeBridge, type PhoneResult, type TvResult } from "./nativeBridge";
 import { formatDuration, type TimerService } from "./timerService";
 
 export interface DispatchResult {
@@ -73,6 +73,8 @@ export class ActionDispatcher {
           return await this.composeEmail(request);
         case "tv_control":
           return await this.tvControl(request);
+        case "phone_control":
+          return await this.phoneControl(request);
         default:
           return fail("Eso todavía no lo puedo hacer en Windows.");
       }
@@ -184,6 +186,26 @@ export class ActionDispatcher {
         return done(result.message ?? "Listo.", request.feedback_speech || result.message || "Listo");
       }
       return fail(result.error ?? "No pude controlar la tele.");
+    } catch (error) {
+      if (error instanceof NativeUnavailableError) return fail(error.message);
+      const msg = typeof error === "string" ? error : error instanceof Error ? error.message : "Error desconocido.";
+      return fail(msg);
+    }
+  }
+
+  private async phoneControl(request: ActionRequest): Promise<DispatchResult> {
+    const task = (typeof request.parameters.value === "string" && request.parameters.value.trim())
+      ? request.parameters.value.trim()
+      : (request.parameters.target?.trim() ?? "");
+
+    if (!task) return fail("¿Qué quieres que haga en tu celular?");
+
+    try {
+      const result = await this.deps.native.invoke<PhoneResult>("phone_run_task", { task });
+      if (result.ok) {
+        return done(result.message ?? "Listo en tu celular.", request.feedback_speech || result.message || "Listo en tu celular");
+      }
+      return fail(result.error ?? "No pude ejecutar la orden en el celular.");
     } catch (error) {
       if (error instanceof NativeUnavailableError) return fail(error.message);
       const msg = typeof error === "string" ? error : error instanceof Error ? error.message : "Error desconocido.";

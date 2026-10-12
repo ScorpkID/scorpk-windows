@@ -47,6 +47,10 @@ export const SUPPORTED_ACTIONS: SupportedAction[] = [
     doc: 'controlar un televisor Samsung conectado a la red local. target = "power" | "volume" | "app" | "input" | "media" | "key". Según target: power → value = "on" | "off"; volume → value = "up" | "down" | "mute" | "unmute"; app → value = nombre de la app ("netflix", "youtube", "spotify", "prime_video", "disney", "apple_tv", "browser", "hbo", "twitch", "plex"); input → value = "hdmi1" | "hdmi2" | "hdmi3" | "hdmi4" | "tv"; media → value = "play" | "pause" | "stop" | "next" | "previous"; key → value = "home" | "back" | "menu" | "up" | "down" | "left" | "right" | "enter". Palabras clave del usuario: "tele", "televisor", "tv", "Samsung".',
   },
   {
+    name: "phone_control",
+    doc: 'controlar o ejecutar tareas en el celular Android conectado (vía ADB/ARTEMIS). target = "task" | "app". value = la orden completa en lenguaje natural tal como la pide el usuario (ej. "abre whatsapp y envía un mensaje a mamá", "pide un Uber a mi casa", "abre Instagram", "toma una foto"). Úsalo SIEMPRE que el usuario mencione "celular", "teléfono", "móvil", "cel", o pida interactuar con una app de su celular.',
+  },
+  {
     name: "respond_chat",
     doc: "preguntas, saludos, análisis de archivos o cualquier cosa que no requiera una acción en el PC. message = la respuesta.",
   },

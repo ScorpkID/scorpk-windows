@@ -43,3 +43,16 @@ export interface TvDepsStatus {
   python_path: string | null;
   samsungtvws_installed: boolean;
 }
+
+export interface PhoneDevice {
+  serial: string;
+  state: string;
+  model: string;
+}
+
+export interface PhoneResult {
+  ok: boolean;
+  message?: string | null;
+  error?: string | null;
+  devices?: PhoneDevice[];
+}
