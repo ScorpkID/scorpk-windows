@@ -94,6 +94,57 @@ def err(message: str) -> dict:
     return {"ok": False, "error": message}
 
 
+def play_youtube_dial(tv_host: str, query: str) -> bool:
+    """Busca el video en YouTube y lo envía a reproducir directamente en la TV usando el protocolo oficial DIAL."""
+    import re
+    import urllib.request
+
+    video_id: str | None = None
+
+    # Si la query ya es un video ID o URL de YouTube
+    if re.match(r"^[a-zA-Z0-9_-]{11}$", query.strip()):
+        video_id = query.strip()
+    elif "watch?v=" in query:
+        m = re.search(r"watch\?v=([a-zA-Z0-9_-]{11})", query)
+        if m:
+            video_id = m.group(1)
+
+    # Si es texto de búsqueda, resolver video ID desde YouTube
+    if not video_id:
+        try:
+            search_url = f"https://www.youtube.com/results?search_query={urllib.request.quote(query)}"
+            search_req = urllib.request.Request(search_url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
+            html = urllib.request.urlopen(search_req, timeout=4).read().decode("utf-8", errors="ignore")
+            # Encontrar primer video relevante
+            m = re.search(r"\/watch\?v=([a-zA-Z0-9_-]{11})", html)
+            if m:
+                video_id = m.group(1)
+        except Exception:
+            pass
+
+    if not video_id:
+        return False
+
+    # Enviar payload oficial DIAL al televisor Samsung (puerto 8080)
+    try:
+        dial_url = f"http://{tv_host}:8080/ws/apps/YouTube"
+        payload = f"v={video_id}".encode("utf-8")
+        dial_req = urllib.request.Request(
+            dial_url,
+            data=payload,
+            headers={
+                "Origin": "https://www.youtube.com",
+                "Referer": "https://www.youtube.com/tv",
+                "Content-Type": "text/plain; charset=utf-8",
+            },
+            method="POST",
+        )
+        res = urllib.request.urlopen(dial_req, timeout=4)
+        return res.status in (200, 201, 204)
+    except Exception:
+        return False
+
+
 def execute(tv, command: str, value: str | None, extra: str | None) -> dict:  # noqa: C901
     """Despacha un comando al televisor y devuelve el resultado como dict."""
 
@@ -145,13 +196,18 @@ def execute(tv, command: str, value: str | None, extra: str | None) -> dict:  # 
             except Exception as exc:
                 return err(f"No pude abrir {value}: {exc}")
 
-        # 3. Si además viene una búsqueda o término (extra), automatizar la búsqueda dentro de la app
+        # 3. Si además viene una búsqueda o término (extra), automatizar la búsqueda y reproducción dentro de la app
         if extra and extra.strip():
             query = extra.strip()
-            time.sleep(2.5)  # Esperar que la app cargue en pantalla
-            try:
-                if app_key in ("youtube", "yutub"):
-                    # Menú lateral -> Buscar -> Escribir texto
+            
+            # CASO ESPECIAL YOUTUBE: Uso del protocolo oficial DIAL (reproducción directa garantizada)
+            if app_key in ("youtube", "yutub"):
+                played = play_youtube_dial(tv.host, query)
+                if played:
+                    return ok(f"Reproduciendo «{query}» en YouTube en la TV.")
+                # Si falló la resolución del video ID, fallback a automatización de interfaz
+                time.sleep(2.0)
+                try:
                     tv.send_key("KEY_LEFT")
                     time.sleep(0.4)
                     tv.send_key("KEY_UP")
@@ -163,8 +219,13 @@ def execute(tv, command: str, value: str | None, extra: str | None) -> dict:  # 
                     tv.send_text(query)
                     time.sleep(0.5)
                     tv.send_key("KEY_ENTER")
-                elif app_key in ("netflix", "spotify"):
-                    # Abrir búsqueda y escribir
+                    return ok(f"Buscando «{query}» en YouTube en la TV.")
+                except Exception:
+                    pass
+
+            elif app_key in ("netflix", "spotify"):
+                time.sleep(2.5)
+                try:
                     tv.send_key("KEY_UP")
                     time.sleep(0.3)
                     tv.send_key("KEY_ENTER")
@@ -172,19 +233,24 @@ def execute(tv, command: str, value: str | None, extra: str | None) -> dict:  # 
                     tv.send_text(query)
                     time.sleep(0.5)
                     tv.send_key("KEY_ENTER")
-                return ok(f"Abierto {value} y buscando «{query}» en la TV.")
-            except Exception as e:
-                return ok(f"Abierto {value} en la TV (no se pudo completar el texto de búsqueda: {e}).")
+                    return ok(f"Abierto {value} y buscando «{query}» en la TV.")
+                except Exception as e:
+                    return ok(f"Abierto {value} en la TV ({e}).")
 
         return ok(f"Abriendo {value} en la TV.")
 
     if command == "search":
-        # Comando directo de búsqueda en la TV (ej. en YouTube)
+        # Comando directo de búsqueda en la TV
         query = value or extra or ""
         if not query:
             return err("No se indicó qué buscar en la TV.")
         
-        # Abrir YouTube por defecto si no hay app abierta
+        # Intentar reproducción instantánea en YouTube vía DIAL
+        played = play_youtube_dial(tv.host, query)
+        if played:
+            return ok(f"Reproduciendo «{query}» en YouTube en la TV.")
+        
+        # Fallback a apertura tradicional
         import urllib.request
         try:
             req_url = f"http://{tv.host}:8001/api/v2/applications/111299001912"

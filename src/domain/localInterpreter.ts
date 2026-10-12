@@ -171,7 +171,20 @@ function parseTv(text: string): ActionRequest | null {
   }
 
   // ─ Apps y Búsqueda en la TV ─────────────────────────────────────────
-  // Si pide buscar o poner algo específico en la TV (ej. "pon faded en youtube en la tele", "busca lofi en youtube en la tele", "busca musica en la tele")
+  // Si pide buscar o poner algo específico en la TV:
+  // Ej: "pon faded en youtube en la tele", "abre youtube en la tele y pon faded", "busca lofi en youtube en la tele", "pon faded en la tele"
+  const abreYPonMatch = text.match(/\b(?:abre|abrir|pon|poner)\s+(youtube|netflix|spotify)\b.*?\by\s+(?:pon|reproduce|busca)\s+(.+)$/);
+  if (abreYPonMatch) {
+    const appName = abreYPonMatch[1];
+    const query = abreYPonMatch[2].replace(/\b(en la tele|en el televisor|en la tv|en tv)\b/g, "").trim();
+    const appValue = TV_APPS[appName] ?? "youtube";
+    return act(
+      "tv_control",
+      { target: "app", value: appValue, message: query },
+      `Reproduciendo «${query}» en ${appName} en la tele`
+    );
+  }
+
   const searchMatch = text.match(/\b(?:busca|buscar|pon|poner|reproduce|reproducir)\s+(.+?)\s+(?:en|de)\s+(youtube|netflix|spotify)\b/)
     ?? text.match(/\b(?:en|de)\s+(youtube|netflix|spotify)\s+(?:busca|pon|reproduce)\s+(.+)\b/);
   if (searchMatch) {
@@ -183,19 +196,19 @@ function parseTv(text: string): ActionRequest | null {
     return act(
       "tv_control",
       { target: "app", value: appValue, message: cleanQuery },
-      `Buscando «${cleanQuery}» en ${appName} en la tele`
+      `Reproduciendo «${cleanQuery}» en ${appName} en la tele`
     );
   }
 
-  // Búsqueda genérica en la TV ("busca videos de gatitos en la tele")
-  const genericSearch = text.match(/\b(?:busca|buscar)\s+(.+?)(?:\s+(?:en la tele|en el televisor|en la tv|en tv))?$/);
-  if (genericSearch && !/\b(en google|en internet|en youtube|en netflix)\b/.test(text)) {
+  // Búsqueda / reproducción genérica en la TV ("pon faded en la tele", "busca lofi en la tele")
+  const genericSearch = text.match(/\b(?:busca|buscar|pon|poner|reproduce|reproducir)\s+(.+?)(?:\s+(?:en la tele|en el televisor|en la tv|en tv))?$/);
+  if (genericSearch && !/\b(en google|en internet|en youtube|en netflix|en spotify)\b/.test(text)) {
     const cleanQuery = genericSearch[1].replace(/\b(en la tele|en el televisor|en la tv|en tv)\b/g, "").trim();
-    if (cleanQuery) {
+    if (cleanQuery && !TV_APPS[cleanQuery]) {
       return act(
         "tv_control",
         { target: "search", value: cleanQuery },
-        `Buscando «${cleanQuery}» en la tele`
+        `Reproduciendo «${cleanQuery}» en la tele`
       );
     }
   }
