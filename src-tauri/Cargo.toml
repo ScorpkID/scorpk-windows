@@ -1,6 +1,6 @@
 [package]
 name = "scorpk-windows"
-version = "0.1.2"
+version = "0.1.3"
 description = "Scorpk Asistente para Windows"
 edition = "2021"
 
