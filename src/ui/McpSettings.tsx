@@ -59,9 +59,19 @@ export default function McpSettings({ onClose }: { onClose: () => void }) {
     }
   }
 
+  function parseArgs(input: string): string[] {
+    const regex = /[^\s"']+|"([^"]*)"|'([^']*)'/g;
+    const matches: string[] = [];
+    let match;
+    while ((match = regex.exec(input)) !== null) {
+      matches.push(match[1] || match[2] || match[0]);
+    }
+    return matches;
+  }
+
   function addServer() {
     if (!newName.trim() || !newCommand.trim()) return;
-    const argsArray = newArgs.trim() ? newArgs.split(" ") : [];
+    const argsArray = newArgs.trim() ? parseArgs(newArgs.trim()) : [];
     const server: McpServerConfig = {
       id: `mcp-${Date.now()}`,
       name: newName.trim(),

@@ -66,9 +66,27 @@ pub async fn mcp_discover_tools(
     env: HashMap<String, String>,
 ) -> Result<Vec<Value>, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let mut cmd = Command::new(&command);
-        cmd.args(&args)
-            .envs(&env)
+        #[cfg(windows)]
+        let mut cmd = {
+            if command.ends_with(".cmd") || command.ends_with(".bat") || command == "npx" || command == "npm" {
+                let mut c = Command::new("cmd.exe");
+                c.arg("/c").arg(&command).args(&args);
+                c
+            } else {
+                let mut c = Command::new(&command);
+                c.args(&args);
+                c
+            }
+        };
+
+        #[cfg(not(windows))]
+        let mut cmd = {
+            let mut c = Command::new(&command);
+            c.args(&args);
+            c
+        };
+
+        cmd.envs(&env)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
@@ -154,9 +172,27 @@ pub async fn mcp_call_tool(
     arguments: Value,
 ) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let mut cmd = Command::new(&command);
-        cmd.args(&args)
-            .envs(&env)
+        #[cfg(windows)]
+        let mut cmd = {
+            if command.ends_with(".cmd") || command.ends_with(".bat") || command == "npx" || command == "npm" {
+                let mut c = Command::new("cmd.exe");
+                c.arg("/c").arg(&command).args(&args);
+                c
+            } else {
+                let mut c = Command::new(&command);
+                c.args(&args);
+                c
+            }
+        };
+
+        #[cfg(not(windows))]
+        let mut cmd = {
+            let mut c = Command::new(&command);
+            c.args(&args);
+            c
+        };
+
+        cmd.envs(&env)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());

@@ -252,7 +252,10 @@ export class ActionDispatcher {
             name: toolName,
             arguments: args,
           });
-          return done(res, request.feedback_speech || `Herramienta ${toolName} ejecutada`);
+
+          // Presentar resultado amigable y bien estructurado
+          const formattedText = `### Resultado de ${server.name} (\`${toolName}\`):\n\n${res}`;
+          return done(formattedText, request.feedback_speech || `Herramienta ${toolName} ejecutada`);
         } catch (err) {
           lastError = typeof err === "string" ? err : err instanceof Error ? err.message : String(err);
         }
