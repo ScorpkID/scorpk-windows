@@ -18,11 +18,13 @@ export default function McpSettings({ onClose }: { onClose: () => void }) {
   const [newArgs, setNewArgs] = useState("");
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
 
+  const exePath = "C:\\Users\\crist\\AppData\\Local\\Scorpk\\scorpk-windows.exe";
+
   const claudeConfig = JSON.stringify(
     {
       mcpServers: {
         scorpk: {
-          command: "C:\\Program Files\\Scorpk\\scorpk-windows.exe",
+          command: exePath,
           args: ["--mcp-server"]
         }
       }
@@ -160,7 +162,7 @@ export default function McpSettings({ onClose }: { onClose: () => void }) {
               <div>
                 <div className="mb-1.5 flex items-center justify-between">
                   <h3 className="text-xs font-semibold uppercase tracking-wider text-muted">
-                    Configuración en Claude Desktop / Cursor
+                    1. Vía Local (Claude Desktop / Cursor)
                   </h3>
                   <button
                     onClick={copyConfig}
@@ -172,6 +174,33 @@ export default function McpSettings({ onClose }: { onClose: () => void }) {
                 <pre className="overflow-x-auto rounded-xl border border-border bg-black p-3 font-mono text-xs text-zinc-300">
                   {claudeConfig}
                 </pre>
+              </div>
+
+              <div className="rounded-xl border border-border bg-black/40 p-3.5 space-y-2">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted">
+                    2. Vía URL SSE / HTTPS (Gemini Spark / Web)
+                  </h3>
+                  <span className="rounded bg-accent/20 px-2 py-0.5 text-[10px] font-medium text-accent">
+                    Puerto 3005 Activo
+                  </span>
+                </div>
+                <p className="text-xs text-muted">
+                  Scorpk incluye un servidor HTTP / SSE en el puerto <span className="font-mono text-white">3005</span>. Para servicios web en la nube como <strong>Gemini Spark</strong> (que requieren HTTPS obligatorio):
+                </p>
+                <div className="space-y-1.5 font-mono text-xs">
+                  <div className="rounded-lg border border-border bg-black p-2 text-zinc-300">
+                    <p className="text-[10px] text-muted">Paso 1: Abre PowerShell y crea un túnel HTTPS seguro:</p>
+                    <p className="text-accent">ngrok http 3005</p>
+                  </div>
+                  <div className="rounded-lg border border-border bg-black p-2 text-zinc-300">
+                    <p className="text-[10px] text-muted">Paso 2: Copia la URL HTTPS asignada y pega en Gemini Spark con /sse:</p>
+                    <p className="text-white">https://tu-subdominio.ngrok-free.app/sse</p>
+                  </div>
+                </div>
+                <p className="text-[11px] text-faint">
+                  * También puedes usar <span className="font-mono text-zinc-300">http://localhost:3005/sse</span> para clientes MCP locales compatibles con HTTP/SSE.
+                </p>
               </div>
             </>
           ) : (

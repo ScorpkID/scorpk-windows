@@ -44,6 +44,8 @@ pub fn run() {
             if let Err(error) = app.global_shortcut().register(assistant_shortcut()) {
                 eprintln!("No se pudo registrar el atajo global: {error}");
             }
+            // Iniciar servidor MCP HTTP/SSE en segundo plano (puerto 3005) para Gemini Spark y web
+            mcp_server::start_http_server(3005);
             Ok(())
         })
         .on_window_event(|window, event| match (window.label(), event) {

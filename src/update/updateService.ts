@@ -9,7 +9,7 @@ export interface WindowsReleaseInfo {
   notes: string[];
 }
 
-export const CURRENT_WINDOWS_VERSION = "0.1.5";
+export const CURRENT_WINDOWS_VERSION = "0.1.6";
 export const WINDOWS_LATEST_URL = "https://scorpk.tech/windows/latest.json";
 
 /** Compara dos versiones semánticas (ej. "0.1.0" vs "0.1.1"). Devuelve >0 si v1 > v2. */

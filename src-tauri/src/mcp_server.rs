@@ -63,6 +63,166 @@ pub fn run_stdio_server() {
     }
 }
 
+/// Inicia el servidor HTTP / SSE en segundo plano (para Gemini Spark, web o ngrok).
+pub fn start_http_server(port: u16) {
+    std::thread::spawn(move || {
+        let addr = format!("0.0.0.0:{port}");
+        let listener = match std::net::TcpListener::bind(&addr) {
+            Ok(l) => l,
+            Err(e) => {
+                eprintln!("[MCP HTTP] No se pudo vincular al puerto {port}: {e}");
+                return;
+            }
+        };
+        println!("[MCP HTTP] Servidor escuchando en http://127.0.0.1:{port}");
+
+        for stream in listener.incoming() {
+            if let Ok(mut stream) = stream {
+                std::thread::spawn(move || {
+                    handle_http_client(&mut stream);
+                });
+            }
+        }
+    });
+}
+
+fn handle_http_client(stream: &mut std::net::TcpStream) {
+    use std::io::Read;
+
+    // Timeout de lectura para evitar colgar hilos
+    let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(30)));
+
+    let mut buf = [0u8; 8192];
+    let n = match stream.read(&mut buf) {
+        Ok(n) if n > 0 => n,
+        _ => return,
+    };
+
+    let req_str = String::from_utf8_lossy(&buf[..n]);
+    let mut lines = req_str.lines();
+    let first_line = lines.next().unwrap_or("");
+    let parts: Vec<&str> = first_line.split_whitespace().collect();
+    if parts.len() < 2 {
+        return;
+    }
+
+    let method = parts[0];
+    let path = parts[1];
+
+    // CORS preflight
+    if method == "OPTIONS" {
+        let response = "HTTP/1.1 204 No Content\r\n\
+Access-Control-Allow-Origin: *\r\n\
+Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n\
+Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With\r\n\
+\r\n";
+        let _ = stream.write_all(response.as_bytes());
+        return;
+    }
+
+    // Ruta 1: GET /sse o GET /mcp (Endpoint SSE estándar para Gemini Spark / Claude)
+    if method == "GET" && (path.starts_with("/sse") || path.starts_with("/mcp")) {
+        // Enviar cabeceras SSE y evento de descubrimiento 'endpoint'
+        let sse_header = "HTTP/1.1 200 OK\r\n\
+Content-Type: text/event-stream\r\n\
+Cache-Control: no-cache\r\n\
+Connection: keep-alive\r\n\
+Access-Control-Allow-Origin: *\r\n\
+\r\n";
+        if stream.write_all(sse_header.as_bytes()).is_err() {
+            return;
+        }
+
+        // Anunciar el endpoint de mensajes según la spec de MCP
+        let init_event = "event: endpoint\r\ndata: /message\r\n\r\n";
+        let _ = stream.write_all(init_event.as_bytes());
+        let _ = stream.flush();
+
+        // Mantener conexión viva con pings
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(15));
+            if stream.write_all(b": ping\n\n").is_err() {
+                break;
+            }
+            let _ = stream.flush();
+        }
+        return;
+    }
+
+    // Ruta 2: POST /message o POST /mcp o POST / (Recepción de JSON-RPC)
+    if method == "POST" {
+        // Extraer cuerpo JSON
+        let body = if let Some(idx) = req_str.find("\r\n\r\n") {
+            &req_str[idx + 4..]
+        } else {
+            ""
+        };
+
+        let req: Result<JsonRpcRequest, _> = serde_json::from_str(body.trim());
+        let response_body = match req {
+            Ok(r) => {
+                let res = handle_request(r);
+                serde_json::to_string(&res.unwrap_or(JsonRpcResponse {
+                    jsonrpc: "2.0".into(),
+                    id: Value::Null,
+                    result: Some(json!({})),
+                    error: None,
+                })).unwrap_or_default()
+            }
+            Err(e) => {
+                let err_res = json!({
+                    "jsonrpc": "2.0",
+                    "id": null,
+                    "error": { "code": -32700, "message": format!("Parse error: {e}") }
+                });
+                serde_json::to_string(&err_res).unwrap_or_default()
+            }
+        };
+
+        let http_response = format!(
+            "HTTP/1.1 200 OK\r\n\
+Content-Type: application/json\r\n\
+Content-Length: {}\r\n\
+Access-Control-Allow-Origin: *\r\n\
+Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n\
+Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With\r\n\
+\r\n\
+{}",
+            response_body.len(),
+            response_body
+        );
+
+        let _ = stream.write_all(http_response.as_bytes());
+        let _ = stream.flush();
+        return;
+    }
+
+    // Ruta 3: GET / (Página de bienvenida / verificación)
+    let info = json!({
+        "status": "online",
+        "name": "Scorpk Model Context Protocol Server",
+        "version": "0.1.6",
+        "endpoints": {
+            "sse": "/sse",
+            "message": "/message",
+            "streamable_http": "/mcp"
+        },
+        "description": "Conéctate desde Gemini Spark usando la URL https://.../sse o desde Claude/Cursor con stdio."
+    });
+    let body = serde_json::to_string_pretty(&info).unwrap_or_default();
+    let res = format!(
+        "HTTP/1.1 200 OK\r\n\
+Content-Type: application/json; charset=utf-8\r\n\
+Content-Length: {}\r\n\
+Access-Control-Allow-Origin: *\r\n\
+\r\n\
+{}",
+        body.len(),
+        body
+    );
+    let _ = stream.write_all(res.as_bytes());
+}
+
 fn handle_request(req: JsonRpcRequest) -> Option<JsonRpcResponse> {
     let id = req.id.unwrap_or(Value::Null);
 
