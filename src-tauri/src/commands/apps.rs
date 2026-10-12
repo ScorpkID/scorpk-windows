@@ -299,7 +299,7 @@ fn open_entry(app: &AppEntry) -> Result<(), String> {
     }
 }
 
-fn open_by_name(name: &str) -> Result<String, String> {
+pub fn open_by_name(name: &str) -> Result<String, String> {
     let query = normalize(name);
     if query.is_empty() || query.len() > 60 {
         return Err("No entendí qué programa abrir.".into());

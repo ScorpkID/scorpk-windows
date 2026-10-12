@@ -1,4 +1,5 @@
-mod commands;
+pub mod commands;
+pub mod mcp_server;
 mod overlay;
 mod tray;
 mod voice;
