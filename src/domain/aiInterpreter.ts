@@ -67,18 +67,20 @@ export class AiInterpreter {
     return this.complete(messages, mode === "chat" ? CHAT_MAX_TOKENS : VOICE_MAX_TOKENS, model);
   }
 
-  /** Petición genérica al proxy (respuesta JSON). Lo usan `interpret` y tareas auxiliares como elegir una app. */
-  async complete(messages: AiMessage[], maxTokens: number, model: AiModel): Promise<string> {
+  /** Petición genérica al proxy. Lo usan `interpret`, tareas auxiliares y síntesis de herramientas. */
+  async complete(messages: AiMessage[], maxTokens: number, model: AiModel, jsonFormat = true): Promise<string> {
     const token = await this.deps.accessToken();
     if (!token) throw new InterpreterError("not_signed_in", "Inicia sesión para usar la IA.");
 
-    const body = {
+    const body: Record<string, unknown> = {
       model: model.id,
       messages,
-      response_format: { type: "json_object" },
       temperature: 0.1,
       max_tokens: maxTokens,
     };
+    if (jsonFormat) {
+      body.response_format = { type: "json_object" };
+    }
 
     let response: Response;
     try {

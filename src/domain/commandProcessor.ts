@@ -88,12 +88,38 @@ export class CommandProcessor {
         speech: "Eso todavía no lo puedo hacer en Windows.",
       };
     }
-    return this.execute(action, input);
+    return this.execute(action, input, model);
   }
 
-  private async execute(action: ActionRequest, heard: string): Promise<ProcessResult> {
+  private async execute(action: ActionRequest, heard: string, model?: AiModel): Promise<ProcessResult> {
     const result = await this.dispatcher.dispatch(action);
-    if (result.ok) return { ok: true, text: result.text, speech: result.speech };
+    if (result.ok) {
+      // Si fue una herramienta MCP (ej. listar carpetas, buscar repos en GitHub, leer una web)
+      // re-enviamos el resultado bruto a la IA para que lo formule de forma inteligente, hermosa y con lenguaje natural
+      if (action.action === "mcp_tool" && model && result.text) {
+        try {
+          const synthesisPrompt = [
+            {
+              role: "system" as const,
+              content: `Eres Scorpk. El usuario pidió: "${heard}".
+Se ejecutó la herramienta con éxito y este es el resultado técnico obtenido:
+${result.text.slice(0, 4000)}
+
+Formula una respuesta directa, elocuente y amigable en español. Presenta la información de forma clara usando formato Markdown (listas con viñetas, negritas, tablas o enlaces si hay URLs). NO devuelvas JSON, devuelve el texto estructurado directamente al usuario.`,
+            },
+            { role: "user" as const, content: "Presenta los resultados al usuario ahora." },
+          ];
+          const humanReply = await this.ai.complete(synthesisPrompt, 800, model, false);
+          if (humanReply && humanReply.trim()) {
+            return { ok: true, text: humanReply.trim(), speech: result.speech };
+          }
+        } catch {
+          // Si falla la síntesis, mostrar resultado directo
+        }
+      }
+
+      return { ok: true, text: result.text, speech: result.speech };
+    }
 
     if (result.code === "app_not_found") {
       const recovered = await this.recoverApp(action.parameters.target ?? heard);
