@@ -215,18 +215,12 @@ function parseTv(text: string): ActionRequest | null {
 
 const PHONE_RE = /\b(celular|cel|telefono|movil|smartphone)\b/;
 
-function parsePhone(text: string): ActionRequest | null {
-  if (!PHONE_RE.test(text)) return null;
+function parsePhone(text: string, rawInput: string): ActionRequest | null {
+  // Coincide si menciona celular/cel/teléfono O si pide WhatsApp explícitamente (WhatsApp vive en el celular)
+  if (!PHONE_RE.test(text) && !/\bwhatsapp\b/.test(text)) return null;
 
-  // Si pide abrir una app específica en el celular
-  const openMatch = text.match(/\b(?:abre|abrir|pon|lanzar)\s+([a-z0-9_\s]+?)\s+(?:en\s+(?:el|mi)\s+(?:celular|cel|telefono|movil))\b/);
-  if (openMatch) {
-    const app = openMatch[1].trim();
-    return act("phone_control", { target: "app", value: `abre ${app}` }, `Abriendo ${app} en tu celular`);
-  }
-
-  // Cualquier otra orden explícita para el celular
-  return act("phone_control", { target: "task", value: text }, "Enviando orden a tu celular");
+  // Si pide una acción en el celular, pasar la orden con el texto original (preservando mayúsculas, nombres y signos)
+  return act("phone_control", { target: "task", value: rawInput.trim() }, "Enviando orden a tu celular");
 }
 
 function parseOpen(text: string): ActionRequest | null {
@@ -242,7 +236,7 @@ export function interpretLocally(input: string): ActionRequest | null {
   const text = stripCourtesy(normalize(input));
   if (!text) return null;
   return (
-    parsePhone(text) ??
+    parsePhone(text, input) ??
     parseTv(text) ??
     parseTimer(text) ??
     parseVolume(text) ??
