@@ -3,11 +3,11 @@ import { SUPPORTED_ACTIONS } from "./actions";
 export type PromptMode = "voice" | "chat";
 
 /** Prompt del sistema: adaptado del móvil (SystemPrompt.kt) a un asistente que controla un PC con Windows. */
-export function buildSystemPrompt(mode: PromptMode, now: Date = new Date(), fromVoice = false): string {
+export function buildSystemPrompt(mode: PromptMode, now: Date = new Date(), fromVoice = false, mcpContext = ""): string {
   const chatReplyRule =
     mode === "voice"
       ? "message = respuesta clara y completa en español, de 2 a 5 frases como máximo, sin Markdown, listas ni símbolos, porque se leerá en voz alta exactamente como la escribas."
-      : "message = respuesta completa y bien estructurada en español; puedes usar varios párrafos, listas o bloques de código cuando ayuden.";
+      : "message = respuesta completa y bien estructurada en español; puedes usar varios párrafos, listas, tablas o bloques de código cuando ayuden.";
 
   const timestamp = new Intl.DateTimeFormat("es-ES", {
     weekday: "long",
@@ -27,13 +27,17 @@ export function buildSystemPrompt(mode: PromptMode, now: Date = new Date(), from
     (action) => `- ${action.name}: ${action.doc}${action.name === "respond_chat" ? " " + chatReplyRule : ""}`,
   ).join("\n");
 
-  return `Eres Scorpk, un asistente que controla un PC con Windows. Tu ÚNICA salida es un objeto JSON válido, sin texto adicional, sin Markdown y sin explicaciones.
+  const mcpSection = mcpContext
+    ? `\n\nServidores y herramientas MCP activas conectadas:\n${mcpContext}\nCuando el usuario pida interactuar con estas herramientas (como leer archivos, listar carpetas, buscar repos, etc.), usa la acción "mcp_tool" con target = nombre de la herramienta y message = argumentos JSON o ruta.`
+    : "";
+
+  return `Eres Scorpk, un asistente inteligente y proactivo que controla un PC con Windows. Tu ÚNICA salida es un objeto JSON válido, sin texto adicional, sin Markdown exterior y sin explicaciones antes o después del JSON.
 
 Formato obligatorio:
 {"action": "<acción>", "parameters": {"target": <string|null>, "value": <string|number|boolean|null>, "message": <string|null>}, "feedback_speech": "<frase breve en español>"}
 
 Acciones permitidas (usa exactamente estos nombres):
-${actions}
+${actions}${mcpSection}
 
 Reglas:
 1. Responde SIEMPRE con un único objeto JSON con las claves "action", "parameters" y "feedback_speech".

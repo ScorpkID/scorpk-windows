@@ -57,9 +57,10 @@ export class AiInterpreter {
     mode: PromptMode,
     model: AiModel,
     fromVoice = false,
+    mcpContext = "",
   ): Promise<string> {
     const messages: AiMessage[] = [
-      { role: "system", content: buildSystemPrompt(mode, new Date(), fromVoice) },
+      { role: "system", content: buildSystemPrompt(mode, new Date(), fromVoice, mcpContext) },
       ...history.slice(-MAX_HISTORY_TURNS).map((turn) => ({ role: turn.role, content: turn.text.slice(0, MAX_TURN_CHARS) })),
       { role: "user", content: input },
     ];

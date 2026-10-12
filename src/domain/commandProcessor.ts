@@ -6,6 +6,8 @@ import { interpretLocally } from "./localInterpreter";
 import { VOICE_MODEL, type ActionRequest, type AiModel, type ChatTurn } from "./model";
 import type { PromptMode } from "./systemPrompt";
 
+import type { NativeBridge, McpServerConfig } from "./nativeBridge";
+
 export type ProcessResult =
   | { ok: true; text: string; speech: string; kind?: "notice" }
   | { ok: false; error: InterpreterErrorKind | "parse" | "action"; text: string };
@@ -28,6 +30,7 @@ export class CommandProcessor {
   constructor(
     private readonly ai: AiInterpreter,
     private readonly dispatcher: ActionDispatcher,
+    private readonly native?: NativeBridge,
   ) {}
 
   async process(
@@ -39,9 +42,24 @@ export class CommandProcessor {
     const local = interpretLocally(input);
     if (local) return this.execute(local, input);
 
+    let mcpContext = "";
+    if (this.native) {
+      try {
+        const servers = await this.native.invoke<McpServerConfig[]>("mcp_get_servers");
+        const active = (servers || []).filter((s) => s.enabled);
+        if (active.length > 0) {
+          mcpContext = active
+            .map((s) => `- Servidor "${s.name}": comando "${s.command} ${s.args.join(" ")}"`)
+            .join("\n");
+        }
+      } catch {
+        // No disponible en navegador
+      }
+    }
+
     let raw: string;
     try {
-      raw = await this.ai.interpret(input, history, options.mode ?? "chat", model, options.fromVoice ?? false);
+      raw = await this.ai.interpret(input, history, options.mode ?? "chat", model, options.fromVoice ?? false, mcpContext);
     } catch (error) {
       if (error instanceof InterpreterError) return { ok: false, error: error.kind, text: error.message };
       throw error;

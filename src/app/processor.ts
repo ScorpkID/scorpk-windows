@@ -15,5 +15,5 @@ export function createProcessor(): CommandProcessor {
     fetchImpl: createProxyFetch(),
     accessToken: async () => (await supabase?.auth.getSession())?.data.session?.access_token ?? null,
   });
-  return new CommandProcessor(ai, dispatcher);
+  return new CommandProcessor(ai, dispatcher, tauriBridge);
 }

@@ -56,3 +56,18 @@ export interface PhoneResult {
   error?: string | null;
   devices?: PhoneDevice[];
 }
+
+export interface McpServerConfig {
+  id: string;
+  name: string;
+  command: string;
+  args: string[];
+  env: Record<string, string>;
+  enabled: boolean;
+}
+
+export interface McpTool {
+  name: string;
+  description?: string;
+  inputSchema?: Record<string, unknown>;
+}

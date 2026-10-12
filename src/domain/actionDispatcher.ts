@@ -1,5 +1,5 @@
 import type { ActionRequest } from "./model";
-import { NativeUnavailableError, type BatteryInfo, type NativeBridge, type PhoneResult, type TvResult } from "./nativeBridge";
+import { NativeUnavailableError, type BatteryInfo, type NativeBridge, type PhoneResult, type TvResult, type McpServerConfig } from "./nativeBridge";
 import { formatDuration, type TimerService } from "./timerService";
 
 export interface DispatchResult {
@@ -75,6 +75,8 @@ export class ActionDispatcher {
           return await this.tvControl(request);
         case "phone_control":
           return await this.phoneControl(request);
+        case "mcp_tool":
+          return await this.mcpTool(request);
         default:
           return fail("Eso todavía no lo puedo hacer en Windows.");
       }
@@ -207,6 +209,56 @@ export class ActionDispatcher {
         return done(result.message ?? "Listo en tu celular.", request.feedback_speech || result.message || "Listo en tu celular");
       }
       return fail(result.error ?? "No pude ejecutar la orden en el celular.");
+    } catch (error) {
+      if (error instanceof NativeUnavailableError) return fail(error.message);
+      const msg = typeof error === "string" ? error : error instanceof Error ? error.message : "Error desconocido.";
+      return fail(msg);
+    }
+  }
+
+  private async mcpTool(request: ActionRequest): Promise<DispatchResult> {
+    const toolName = request.parameters.target?.trim();
+    if (!toolName) return fail("¿Qué herramienta MCP deseas ejecutar?");
+
+    let args: Record<string, unknown> = {};
+    const rawVal = request.parameters.message || request.parameters.value;
+    if (typeof rawVal === "string") {
+      try {
+        args = JSON.parse(rawVal);
+      } catch {
+        // Si es una ruta (ej. para filesystem) u otro texto simple
+        args = { path: rawVal };
+      }
+    } else if (rawVal && typeof rawVal === "object") {
+      args = rawVal as Record<string, unknown>;
+    }
+
+    try {
+      // 1. Obtener servidores MCP configurados
+      const servers = await this.deps.native.invoke<McpServerConfig[]>("mcp_get_servers");
+      const enabledServers = (servers || []).filter((s) => s.enabled);
+      if (enabledServers.length === 0) {
+        return fail("No tienes servidores MCP activos en la configuración.");
+      }
+
+      // 2. Buscar qué servidor tiene la herramienta o probar con el primero habilitado
+      let lastError: string | null = null;
+      for (const server of enabledServers) {
+        try {
+          const res = await this.deps.native.invoke<string>("mcp_call_tool", {
+            command: server.command,
+            args: server.args,
+            env: server.env || {},
+            name: toolName,
+            arguments: args,
+          });
+          return done(res, request.feedback_speech || `Herramienta ${toolName} ejecutada`);
+        } catch (err) {
+          lastError = typeof err === "string" ? err : err instanceof Error ? err.message : String(err);
+        }
+      }
+
+      return fail(lastError || `No se pudo ejecutar la herramienta ${toolName}.`);
     } catch (error) {
       if (error instanceof NativeUnavailableError) return fail(error.message);
       const msg = typeof error === "string" ? error : error instanceof Error ? error.message : "Error desconocido.";

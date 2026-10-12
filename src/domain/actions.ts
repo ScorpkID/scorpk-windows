@@ -51,6 +51,10 @@ export const SUPPORTED_ACTIONS: SupportedAction[] = [
     doc: 'controlar o ejecutar tareas en el celular Android conectado (vía ADB/ARTEMIS). target = "task" | "app". value = la orden completa en lenguaje natural tal como la pide el usuario (ej. "abre whatsapp y envía un mensaje a mamá", "pide un Uber a mi casa", "abre Instagram", "toma una foto"). Úsalo SIEMPRE que el usuario mencione "celular", "teléfono", "móvil", "cel", o pida interactuar con una app de su celular.',
   },
   {
+    name: "mcp_tool",
+    doc: 'ejecutar una herramienta de un servidor MCP conectado (ej. filesystem, github, postgres). target = nombre de la herramienta (ej. "list_directory", "read_file", "write_file", etc.); message = JSON o parámetros para la herramienta (ej. ruta de carpeta o archivo). Úsalo cuando el usuario pida listar archivos, leer archivos, consultar bases de datos o usar herramientas de servidores MCP externos.',
+  },
+  {
     name: "respond_chat",
     doc: "preguntas, saludos, análisis de archivos o cualquier cosa que no requiera una acción en el PC. message = la respuesta.",
   },

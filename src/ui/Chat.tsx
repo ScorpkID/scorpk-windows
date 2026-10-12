@@ -6,6 +6,7 @@ import { openExternal, PRICING_URL } from "../util/openExternal";
 import PhoneSettings from "./PhoneSettings";
 import TvSettings from "./TvSettings";
 import McpSettings from "./McpSettings";
+import { MarkdownMessage } from "./MarkdownMessage";
 
 interface Props {
   conversationId: string;
@@ -154,7 +155,15 @@ export default function Chat({ conversationId, initialMessages, isPro, onRefresh
           {messages.map((message) => (
             <Bubble key={message.id} message={message} />
           ))}
-          {busy && <p className="appear text-sm text-muted">Pensando…</p>}
+          {busy && (
+            <div className="appear flex items-center gap-3 rounded-2xl border border-border/80 bg-card/60 px-4 py-3 text-xs text-muted backdrop-blur-md">
+              <div className="relative flex h-3 w-3 items-center justify-center">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-75"></span>
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-accent"></span>
+              </div>
+              <span className="font-medium text-zinc-300">Scorpk está procesando tu orden…</span>
+            </div>
+          )}
           {needsPro && <ProCard />}
           {sessionExpired && (
             <p className="text-center text-sm text-muted">
@@ -210,11 +219,15 @@ function Bubble({ message }: { message: ChatMessage }) {
   return (
     <div className={`appear flex ${isUser ? "justify-end" : "justify-start"}`}>
       <div
-        className={`max-w-[85%] select-text whitespace-pre-wrap rounded-card px-4 py-2.5 text-sm leading-relaxed ${
-          isUser ? "bg-bubble" : message.kind === "notice" ? "border border-border bg-card text-muted" : "bg-card"
+        className={`max-w-[88%] select-text rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+          isUser
+            ? "bg-bubble text-white shadow-sm"
+            : message.kind === "notice"
+            ? "border border-border bg-card text-muted"
+            : "border border-border/60 bg-card text-zinc-100 shadow-sm"
         }`}
       >
-        {message.text}
+        <MarkdownMessage content={message.text} isUser={isUser} />
       </div>
     </div>
   );
