@@ -10,3 +10,4 @@ pub mod login;
 pub mod phone;
 pub mod samsung_tv;
 pub mod updater;
+pub mod mcp_client;

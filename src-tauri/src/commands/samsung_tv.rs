@@ -144,13 +144,17 @@ fn run_script(
 
 /// Envía un Magic Packet (Wake-on-LAN) a la dirección MAC indicada.
 fn send_wol(mac: &str) -> Result<(), String> {
-    let mac_bytes: Vec<u8> = mac
-        .split(|c| c == ':' || c == '-')
-        .map(|s| u8::from_str_radix(s, 16).map_err(|_| format!("MAC inválida: {mac}")))
-        .collect::<Result<Vec<u8>, String>>()?;
+    // Limpia y soporta cualquier separador: ':' o '-' o '.' o espacio
+    let clean_mac: String = mac.chars().filter(|c| c.is_ascii_hexdigit()).collect();
+    if clean_mac.len() != 12 {
+        return Err(format!("MAC inválida: {mac} (debe tener 12 dígitos hexadecimales)"));
+    }
 
-    if mac_bytes.len() != 6 {
-        return Err(format!("La MAC debe tener 6 octetos, se encontraron {}", mac_bytes.len()));
+    let mut mac_bytes = Vec::with_capacity(6);
+    for i in (0..12).step_by(2) {
+        let byte = u8::from_str_radix(&clean_mac[i..i + 2], 16)
+            .map_err(|_| format!("MAC inválida: {mac}"))?;
+        mac_bytes.push(byte);
     }
 
     // Magic Packet: 6 bytes 0xFF + 16 repeticiones de la MAC (102 bytes).

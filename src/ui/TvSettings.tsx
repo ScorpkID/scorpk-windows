@@ -190,8 +190,12 @@ export default function TvSettings({ onClose }: { onClose: () => void }) {
               <input
                 type="text"
                 value={config.mac}
-                onChange={(e) => setConfig((prev) => ({ ...prev, mac: e.target.value }))}
-                placeholder="AA:BB:CC:DD:EE:FF"
+                onChange={(e) => {
+                  const val = e.target.value.replace(/[^0-9a-fA-F]/g, "").toUpperCase();
+                  const formatted = val.match(/.{1,2}/g)?.slice(0, 6).join(":") ?? val;
+                  setConfig((prev) => ({ ...prev, mac: formatted }));
+                }}
+                placeholder="F4:FE:FB:7A:5F:4E"
                 className="mt-1 w-full rounded-xl border border-border bg-black px-4 py-2.5 text-sm outline-none placeholder:text-muted focus:border-white/30"
               />
             </label>
