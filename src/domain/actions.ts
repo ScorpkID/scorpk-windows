@@ -44,7 +44,7 @@ export const SUPPORTED_ACTIONS: SupportedAction[] = [
   },
   {
     name: "tv_control",
-    doc: 'controlar un televisor Samsung conectado a la red local. target = "power" | "volume" | "app" | "input" | "media" | "key". Según target: power → value = "on" | "off"; volume → value = "up" | "down" | "mute" | "unmute"; app → value = nombre de la app ("netflix", "youtube", "spotify", "prime_video", "disney", "apple_tv", "browser", "hbo", "twitch", "plex"); input → value = "hdmi1" | "hdmi2" | "hdmi3" | "hdmi4" | "tv"; media → value = "play" | "pause" | "stop" | "next" | "previous"; key → value = "home" | "back" | "menu" | "up" | "down" | "left" | "right" | "enter". Palabras clave del usuario: "tele", "televisor", "tv", "Samsung".',
+    doc: 'controlar un televisor Samsung conectado a la red local. target = "power" | "volume" | "app" | "search" | "input" | "media" | "key". Según target: power → value = "on" | "off"; volume → value = "up" | "down" | "mute" | "unmute"; app → value = nombre de la app ("netflix", "youtube", "spotify", "prime_video", "disney", "apple_tv", "browser", "hbo", "twitch", "plex"), si el usuario además pide buscar o poner algo específico incluye message = qué buscar (ej. "faded", "lofi"); search → value = término de búsqueda a escribir en la app de video activa en la tele; input → value = "hdmi1" | "hdmi2" | "hdmi3" | "hdmi4" | "tv"; media → value = "play" | "pause" | "stop" | "next" | "previous"; key → value = "home" | "back" | "menu" | "up" | "down" | "left" | "right" | "enter". Palabras clave del usuario: "tele", "televisor", "tv", "Samsung".',
   },
   {
     name: "phone_control",

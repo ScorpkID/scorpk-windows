@@ -186,6 +186,7 @@ pub async fn tv_execute(
     app: tauri::AppHandle,
     command: String,
     value: Option<String>,
+    extra: Option<String>,
 ) -> Result<TvResult, String> {
     let config = read_config(&app)?;
     if !config.configured {
@@ -200,7 +201,7 @@ pub async fn tv_execute(
             tokio::time::sleep(Duration::from_secs(3)).await;
         }
         // Después del WoL, intentar confirmar con el script (si ya está encendida, no pasa nada).
-        match call_script(&app, &config, &command, value.as_deref()) {
+        match call_script(&app, &config, &command, value.as_deref(), extra.as_deref()) {
             Ok(result) => return Ok(result),
             Err(_) => {
                 // La TV puede tardar más en levantar el WS tras un WoL. Devolver éxito optimista.
@@ -213,7 +214,7 @@ pub async fn tv_execute(
         }
     }
 
-    call_script(&app, &config, &command, value.as_deref())
+    call_script(&app, &config, &command, value.as_deref(), extra.as_deref())
 }
 
 /// Devuelve la configuración actual del televisor.
@@ -245,7 +246,7 @@ pub async fn tv_pair(app: tauri::AppHandle) -> Result<TvResult, String> {
     if config.ip.is_empty() {
         return Err("Primero ingresa la IP del televisor.".into());
     }
-    call_script(&app, &config, "pair", None)
+    call_script(&app, &config, "pair", None, None)
 }
 
 /// Comprueba si Python y samsungtvws están disponibles.
@@ -316,6 +317,7 @@ fn call_script(
     config: &TvConfig,
     command: &str,
     value: Option<&str>,
+    extra: Option<&str>,
 ) -> Result<TvResult, String> {
     let python = find_python().ok_or("No se encontró Python en el sistema.")?;
     if !check_samsungtvws(&python) {
@@ -333,6 +335,9 @@ fn call_script(
     });
     if let Some(v) = value {
         request["value"] = serde_json::Value::String(v.to_string());
+    }
+    if let Some(e) = extra {
+        request["extra"] = serde_json::Value::String(e.to_string());
     }
 
     run_script(&python, &script, &request.to_string())

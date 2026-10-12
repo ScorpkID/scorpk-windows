@@ -175,13 +175,14 @@ export class ActionDispatcher {
   private async tvControl(request: ActionRequest): Promise<DispatchResult> {
     const command = request.parameters.target?.trim();
     const value = typeof request.parameters.value === "string" ? request.parameters.value.trim() : null;
+    const extra = typeof request.parameters.message === "string" ? request.parameters.message.trim() : null;
     if (!command) return fail("¿Qué quieres que haga en la tele?");
 
-    const validCommands = new Set(["power", "volume", "app", "input", "media", "key"]);
+    const validCommands = new Set(["power", "volume", "app", "search", "text", "input", "media", "key"]);
     if (!validCommands.has(command)) return fail(`Comando de TV no reconocido: ${command}.`);
 
     try {
-      const result = await this.deps.native.invoke<TvResult>("tv_execute", { command, value });
+      const result = await this.deps.native.invoke<TvResult>("tv_execute", { command, value, extra });
       if (result.ok) {
         return done(result.message ?? "Listo.", request.feedback_speech || result.message || "Listo");
       }

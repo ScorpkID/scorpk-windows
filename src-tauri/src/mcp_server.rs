@@ -201,7 +201,7 @@ Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With\r\n\
     let info = json!({
         "status": "online",
         "name": "Scorpk Model Context Protocol Server",
-        "version": "0.1.6",
+        "version": "0.1.7",
         "endpoints": {
             "sse": "/sse",
             "message": "/message",
@@ -238,7 +238,7 @@ fn handle_request(req: JsonRpcRequest) -> Option<JsonRpcResponse> {
                 },
                 "serverInfo": {
                     "name": "scorpk-mcp-server",
-                    "version": "0.1.4"
+                    "version": "0.1.7"
                 }
             });
             Some(JsonRpcResponse {
@@ -404,7 +404,8 @@ fn execute_tool(name: &str, args: Value) -> Value {
         "scorpk_tv_control" => {
             let command = args.get("command").and_then(|v| v.as_str()).unwrap_or("");
             let value = args.get("value").and_then(|v| v.as_str());
-            execute_tv_command(command, value)
+            let extra = args.get("extra").and_then(|v| v.as_str());
+            execute_tv_command(command, value, extra)
         }
         "scorpk_open_app" => {
             let app_name = args.get("app_name").and_then(|v| v.as_str()).unwrap_or("");
@@ -486,6 +487,70 @@ fn execute_android_cli(task: &str) -> String {
     format!("Orden Android procesada: {task}")
 }
 
-fn execute_tv_command(command: &str, value: Option<&str>) -> String {
-    format!("Comando TV '{command}' (valor: {:?}) procesado.", value)
+fn execute_tv_command(command: &str, value: Option<&str>, extra: Option<&str>) -> String {
+    // Buscar configuración de la TV
+    let app_dir = dirs_fallback_app_dir();
+    let config_file = app_dir.join("samsung_tv_config.json");
+    let token_file = app_dir.join("samsung_tv_token.txt");
+    let script_file = app_dir.join("samsung_controller.py");
+
+    let ip = if let Ok(data) = std::fs::read_to_string(&config_file) {
+        if let Ok(parsed) = serde_json::from_str::<Value>(&data) {
+            parsed.get("ip").and_then(|v| v.as_str()).map(|s| s.to_string())
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    let ip = match ip {
+        Some(i) if !i.is_empty() => i,
+        _ => return "No hay televisor Samsung configurado en Scorpk (abre Scorpk > TV para configurar la IP).".to_string(),
+    };
+
+    let mut req_obj = json!({
+        "ip": ip,
+        "port": 8002,
+        "token_file": token_file.to_string_lossy(),
+        "command": command,
+    });
+    if let Some(v) = value {
+        req_obj["value"] = json!(v);
+    }
+    if let Some(e) = extra {
+        req_obj["extra"] = json!(e);
+    }
+
+    let req_str = req_obj.to_string();
+    for py in ["python", "python3", "py"] {
+        if let Ok(output) = std::process::Command::new(py)
+            .arg(&script_file)
+            .arg(&req_str)
+            .output()
+        {
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                if let Ok(parsed) = serde_json::from_str::<Value>(stdout.trim()) {
+                    if let Some(msg) = parsed.get("message").and_then(|m| m.as_str()) {
+                        return msg.to_string();
+                    }
+                    if let Some(err) = parsed.get("error").and_then(|e| e.as_str()) {
+                        return format!("Error TV: {err}");
+                    }
+                }
+                return stdout.trim().to_string();
+            }
+        }
+    }
+
+    format!("Comando TV '{command}' ejecutado.")
+}
+
+fn dirs_fallback_app_dir() -> std::path::PathBuf {
+    if let Ok(appdata) = std::env::var("APPDATA") {
+        std::path::PathBuf::from(appdata).join("tech.scorpk.windows")
+    } else {
+        std::path::PathBuf::from(r"C:\Users\crist\AppData\Roaming\tech.scorpk.windows")
+    }
 }

@@ -170,7 +170,37 @@ function parseTv(text: string): ActionRequest | null {
     return act("tv_control", { target: "volume", value: "down" }, "Volumen de la tele abajo");
   }
 
-  // ─ Apps ───────────────────────────────────────────────────────────────
+  // ─ Apps y Búsqueda en la TV ─────────────────────────────────────────
+  // Si pide buscar o poner algo específico en la TV (ej. "pon faded en youtube en la tele", "busca lofi en youtube en la tele", "busca musica en la tele")
+  const searchMatch = text.match(/\b(?:busca|buscar|pon|poner|reproduce|reproducir)\s+(.+?)\s+(?:en|de)\s+(youtube|netflix|spotify)\b/)
+    ?? text.match(/\b(?:en|de)\s+(youtube|netflix|spotify)\s+(?:busca|pon|reproduce)\s+(.+)\b/);
+  if (searchMatch) {
+    const isFirstApp = TV_APPS[searchMatch[1]] !== undefined;
+    const appName = isFirstApp ? searchMatch[1] : searchMatch[2];
+    const query = isFirstApp ? searchMatch[2] : searchMatch[1];
+    const appValue = TV_APPS[appName] ?? "youtube";
+    const cleanQuery = query.replace(/\b(en la tele|en el televisor|en la tv|en tv)\b/g, "").trim();
+    return act(
+      "tv_control",
+      { target: "app", value: appValue, message: cleanQuery },
+      `Buscando «${cleanQuery}» en ${appName} en la tele`
+    );
+  }
+
+  // Búsqueda genérica en la TV ("busca videos de gatitos en la tele")
+  const genericSearch = text.match(/\b(?:busca|buscar)\s+(.+?)(?:\s+(?:en la tele|en el televisor|en la tv|en tv))?$/);
+  if (genericSearch && !/\b(en google|en internet|en youtube|en netflix)\b/.test(text)) {
+    const cleanQuery = genericSearch[1].replace(/\b(en la tele|en el televisor|en la tv|en tv)\b/g, "").trim();
+    if (cleanQuery) {
+      return act(
+        "tv_control",
+        { target: "search", value: cleanQuery },
+        `Buscando «${cleanQuery}» en la tele`
+      );
+    }
+  }
+
+  // Apertura directa de apps en la TV
   for (const [keyword, appValue] of Object.entries(TV_APPS)) {
     if (text.includes(keyword)) {
       return act("tv_control", { target: "app", value: appValue }, `Abriendo ${keyword} en la tele`);

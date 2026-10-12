@@ -125,11 +125,102 @@ def execute(tv, command: str, value: str | None, extra: str | None) -> dict:  # 
         if not app_id:
             names = ", ".join(sorted(TIZEN_APPS.keys()))
             return err(f"No conozco la app '{value}'. Apps disponibles: {names}")
+        
+        # 1. Intentar primero lanzamiento directo vía REST API (puerto 8001) - instantáneo y garantizado
+        import urllib.request
+        rest_ok = False
         try:
-            tv.run_app(app_id)
-            return ok(f"Abriendo {value} en la TV.")
-        except Exception as exc:
-            return err(f"No pude abrir {value}: {exc}")
+            req_url = f"http://{tv.host}:8001/api/v2/applications/{app_id}"
+            req = urllib.request.Request(req_url, data=b"", method="POST")
+            res = urllib.request.urlopen(req, timeout=3)
+            if res.status in (200, 201, 204):
+                rest_ok = True
+        except Exception:
+            pass
+
+        # 2. Si REST no responde o como complemento, ejecutar vía WebSocket run_app
+        if not rest_ok:
+            try:
+                tv.run_app(app_id)
+            except Exception as exc:
+                return err(f"No pude abrir {value}: {exc}")
+
+        # 3. Si además viene una búsqueda o término (extra), automatizar la búsqueda dentro de la app
+        if extra and extra.strip():
+            query = extra.strip()
+            time.sleep(2.5)  # Esperar que la app cargue en pantalla
+            try:
+                if app_key in ("youtube", "yutub"):
+                    # Menú lateral -> Buscar -> Escribir texto
+                    tv.send_key("KEY_LEFT")
+                    time.sleep(0.4)
+                    tv.send_key("KEY_UP")
+                    time.sleep(0.3)
+                    tv.send_key("KEY_UP")
+                    time.sleep(0.3)
+                    tv.send_key("KEY_ENTER")
+                    time.sleep(1.0)
+                    tv.send_text(query)
+                    time.sleep(0.5)
+                    tv.send_key("KEY_ENTER")
+                elif app_key in ("netflix", "spotify"):
+                    # Abrir búsqueda y escribir
+                    tv.send_key("KEY_UP")
+                    time.sleep(0.3)
+                    tv.send_key("KEY_ENTER")
+                    time.sleep(1.0)
+                    tv.send_text(query)
+                    time.sleep(0.5)
+                    tv.send_key("KEY_ENTER")
+                return ok(f"Abierto {value} y buscando «{query}» en la TV.")
+            except Exception as e:
+                return ok(f"Abierto {value} en la TV (no se pudo completar el texto de búsqueda: {e}).")
+
+        return ok(f"Abriendo {value} en la TV.")
+
+    if command == "search":
+        # Comando directo de búsqueda en la TV (ej. en YouTube)
+        query = value or extra or ""
+        if not query:
+            return err("No se indicó qué buscar en la TV.")
+        
+        # Abrir YouTube por defecto si no hay app abierta
+        import urllib.request
+        try:
+            req_url = f"http://{tv.host}:8001/api/v2/applications/111299001912"
+            req = urllib.request.Request(req_url, data=b"", method="POST")
+            urllib.request.urlopen(req, timeout=3)
+        except Exception:
+            try:
+                tv.run_app("111299001912")
+            except Exception:
+                pass
+        
+        time.sleep(2.5)
+        try:
+            tv.send_key("KEY_LEFT")
+            time.sleep(0.4)
+            tv.send_key("KEY_UP")
+            time.sleep(0.3)
+            tv.send_key("KEY_UP")
+            time.sleep(0.3)
+            tv.send_key("KEY_ENTER")
+            time.sleep(1.0)
+            tv.send_text(query)
+            time.sleep(0.5)
+            tv.send_key("KEY_ENTER")
+            return ok(f"Buscando «{query}» en YouTube en la TV.")
+        except Exception as e:
+            return err(f"Error realizando la búsqueda: {e}")
+
+    if command == "text":
+        if not value:
+            return err("No se indicó el texto a escribir en la TV.")
+        try:
+            tv.send_text(value)
+            return ok(f"Texto «{value}» enviado a la TV.")
+        except Exception as e:
+            return err(f"No se pudo escribir el texto en la TV: {e}")
 
     if command == "input":
         if not value:
