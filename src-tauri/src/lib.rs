@@ -75,6 +75,7 @@ pub fn run() {
             commands::phone::phone_list_devices,
             commands::phone::phone_connect_wireless,
             commands::phone::phone_run_task,
+            commands::updater::download_and_install_update,
             overlay::overlay_hide,
             overlay::overlay_fit,
             overlay::open_voice_settings,
