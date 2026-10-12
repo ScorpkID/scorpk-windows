@@ -241,21 +241,53 @@ export class ActionDispatcher {
         return fail("No tienes servidores MCP activos en la configuración.");
       }
 
-      // 2. Buscar qué servidor tiene la herramienta o probar con el primero habilitado
+      // 2. Normalizar nombre de herramienta habitual
+      let actualTool = toolName;
+      let targetServer: McpServerConfig | undefined;
+
+      // Asignación inteligente por herramienta
+      if (toolName === "search_repositories" || toolName === "get_file_contents" || toolName === "create_or_update_file" || toolName === "create_issue" || toolName === "GitHub" || toolName.toLowerCase().includes("github")) {
+        targetServer = enabledServers.find((s) => s.name.toLowerCase().includes("github"));
+        if (actualTool === "GitHub" || actualTool.toLowerCase() === "github") {
+          actualTool = "search_repositories";
+          if (!args.query) args = { query: "user:CristianT71" };
+        }
+      } else if (toolName === "fetch" || toolName === "Fetch" || toolName.toLowerCase().includes("fetch")) {
+        targetServer = enabledServers.find((s) => s.name.toLowerCase().includes("fetch"));
+        actualTool = "fetch";
+        if (typeof rawVal === "string" && !args.url) {
+          let url = rawVal;
+          if (!url.startsWith("http://") && !url.startsWith("https://")) url = `https://${url}`;
+          args = { url };
+        }
+      } else if (toolName === "list_directory" || toolName === "read_file" || toolName === "write_file" || toolName === "Filesystem" || toolName.toLowerCase().includes("filesystem")) {
+        targetServer = enabledServers.find((s) => s.name.toLowerCase().includes("filesystem"));
+        if (actualTool === "Filesystem" || actualTool.toLowerCase() === "filesystem") {
+          actualTool = "list_directory";
+        }
+      }
+
+      const serversToTry = targetServer ? [targetServer] : enabledServers;
       let lastError: string | null = null;
-      for (const server of enabledServers) {
+
+      for (const server of serversToTry) {
         try {
           const res = await this.deps.native.invoke<string>("mcp_call_tool", {
             command: server.command,
             args: server.args,
             env: server.env || {},
-            name: toolName,
+            name: actualTool,
             arguments: args,
           });
 
-          // Presentar resultado amigable y bien estructurado
-          const formattedText = `### Resultado de ${server.name} (\`${toolName}\`):\n\n${res}`;
-          return done(formattedText, request.feedback_speech || `Herramienta ${toolName} ejecutada`);
+          // Si el servidor devolvió un error de herramienta no encontrada en este servidor, probar el siguiente
+          if (res.includes("Tool not found") || res.includes("-32602")) {
+            lastError = res;
+            continue;
+          }
+
+          const formattedText = `### Resultado de ${server.name} (\`${actualTool}\`):\n\n${res}`;
+          return done(formattedText, request.feedback_speech || `Herramienta ${actualTool} ejecutada`);
         } catch (err) {
           lastError = typeof err === "string" ? err : err instanceof Error ? err.message : String(err);
         }
