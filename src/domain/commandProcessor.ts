@@ -102,16 +102,24 @@ export class CommandProcessor {
             {
               role: "system" as const,
               content: `Eres Scorpk. El usuario pidió: "${heard}".
-Se ejecutó la herramienta con éxito y este es el resultado técnico obtenido:
+Resultado técnico de la herramienta:
 ${result.text.slice(0, 4000)}
 
-Formula una respuesta directa, elocuente y amigable en español. Presenta la información de forma clara usando formato Markdown (listas con viñetas, negritas, tablas o enlaces si hay URLs). NO devuelvas JSON, devuelve el texto estructurado directamente al usuario.`,
+Formula una respuesta directa, humana y amigable en español. Presenta los datos con formato Markdown elegante (listas con viñetas, enlaces si hay URLs, negritas). Tu respuesta debe ser un objeto JSON con la clave "message":
+{"message": "<tu respuesta formateada en Markdown>"}`,
             },
-            { role: "user" as const, content: "Presenta los resultados al usuario ahora." },
+            { role: "user" as const, content: "Presenta el resultado ahora." },
           ];
-          const humanReply = await this.ai.complete(synthesisPrompt, 800, model, false);
-          if (humanReply && humanReply.trim()) {
-            return { ok: true, text: humanReply.trim(), speech: result.speech };
+          const rawReply = await this.ai.complete(synthesisPrompt, 800, model, true);
+          let finalReply = "";
+          try {
+            const parsed = JSON.parse(rawReply);
+            finalReply = parsed.message || parsed.text || parsed.content || rawReply;
+          } catch {
+            finalReply = rawReply;
+          }
+          if (finalReply && finalReply.trim()) {
+            return { ok: true, text: finalReply.trim(), speech: result.speech };
           }
         } catch {
           // Si falla la síntesis, mostrar resultado directo

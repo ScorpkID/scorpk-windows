@@ -226,8 +226,8 @@ export class ActionDispatcher {
       try {
         args = JSON.parse(rawVal);
       } catch {
-        // Si es una ruta (ej. para filesystem) u otro texto simple
-        args = { path: rawVal };
+        // Texto simple
+        args = { query: rawVal, path: rawVal, url: rawVal };
       }
     } else if (rawVal && typeof rawVal === "object") {
       args = rawVal as Record<string, unknown>;
@@ -241,29 +241,47 @@ export class ActionDispatcher {
         return fail("No tienes servidores MCP activos en la configuración.");
       }
 
-      // 2. Normalizar nombre de herramienta habitual
+      // 2. Normalizar nombre de herramienta y argumentos según el caso
       let actualTool = toolName;
       let targetServer: McpServerConfig | undefined;
 
-      // Asignación inteligente por herramienta
-      if (toolName === "search_repositories" || toolName === "get_file_contents" || toolName === "create_or_update_file" || toolName === "create_issue" || toolName === "GitHub" || toolName.toLowerCase().includes("github")) {
+      // GitHub
+      if (
+        toolName === "search_repositories" ||
+        toolName === "get_file_contents" ||
+        toolName === "create_or_update_file" ||
+        toolName === "create_issue" ||
+        toolName.toLowerCase().includes("github")
+      ) {
         targetServer = enabledServers.find((s) => s.name.toLowerCase().includes("github"));
-        if (actualTool === "GitHub" || actualTool.toLowerCase() === "github") {
-          actualTool = "search_repositories";
-          if (!args.query) args = { query: "user:CristianT71" };
+        actualTool = "search_repositories";
+        if (!args.query || typeof args.query !== "string" || !args.query.trim()) {
+          args.query = "user:CristianT71";
         }
-      } else if (toolName === "fetch" || toolName === "Fetch" || toolName.toLowerCase().includes("fetch")) {
+      }
+      // Fetch / Web Reader
+      else if (toolName === "fetch" || toolName.toLowerCase().includes("fetch") || toolName.toLowerCase().includes("web")) {
         targetServer = enabledServers.find((s) => s.name.toLowerCase().includes("fetch"));
         actualTool = "fetch";
-        if (typeof rawVal === "string" && !args.url) {
-          let url = rawVal;
-          if (!url.startsWith("http://") && !url.startsWith("https://")) url = `https://${url}`;
-          args = { url };
+        let targetUrl = (typeof args.url === "string" ? args.url : typeof rawVal === "string" ? rawVal : "").trim();
+        if (!targetUrl || targetUrl.startsWith("{")) targetUrl = "https://scorpk.tech";
+        if (!targetUrl.startsWith("http://") && !targetUrl.startsWith("https://")) {
+          targetUrl = `https://${targetUrl}`;
         }
-      } else if (toolName === "list_directory" || toolName === "read_file" || toolName === "write_file" || toolName === "Filesystem" || toolName.toLowerCase().includes("filesystem")) {
+        args = { url: targetUrl };
+      }
+      // Filesystem
+      else if (
+        toolName === "list_directory" ||
+        toolName === "read_file" ||
+        toolName === "write_file" ||
+        toolName.toLowerCase().includes("filesystem") ||
+        toolName.toLowerCase().includes("file")
+      ) {
         targetServer = enabledServers.find((s) => s.name.toLowerCase().includes("filesystem"));
-        if (actualTool === "Filesystem" || actualTool.toLowerCase() === "filesystem") {
-          actualTool = "list_directory";
+        actualTool = "list_directory";
+        if (!args.path || typeof args.path !== "string" || !args.path.trim()) {
+          args.path = "C:\\Users\\crist\\TRABAJOS ADSO 3225853";
         }
       }
 
